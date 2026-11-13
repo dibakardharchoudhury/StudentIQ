@@ -21,6 +21,19 @@ gaze. Learning scores are based on recorded practice, not attention.
 - Private Azure Storage endpoints, managed identity, and private DNS. Session
   records are not hosted on GitHub Pages.
 
+## Learning activities
+
+The lesson puts the conversation and optional question starters before the
+activity area. Learners can explore multiplication with a dot array, build
+English or Norwegian sentences, and select stages of the water cycle. The
+existing fraction explorer, piano and optional quizzes remain available.
+The new visual activities run locally, use no additional model calls, and do
+not save attempts or award grades. Their teacher buttons only add a question
+to the draft; the learner reviews and sends it explicitly. Conversation,
+quiz and piano practice history continue to be saved by the backend as before.
+Changing subjects or language, starting a new session, or opening an old one
+asks before clearing an unsent question.
+
 The deployed Azure resources are in `rg-studentiq-20261113` in Norway East.
 The Entra application registration is a tenant-level directory object and cannot
 reside in an Azure resource group. GitHub Pages is publicly accessible; the API

@@ -8,6 +8,7 @@ import { copy, subjects, subjectIcons, subjectLabel } from './i18n';
 import { Speech } from './speech';
 import Teacher from './Teacher';
 import FractionExplorer from './FractionExplorer';
+import { ArrayExplorer, SentenceBuilder, WaterCycle } from './VisualActivities';
 import PlanningCalendar from './PlanningCalendar';
 import AccessManagement from './AccessManagement';
 import Piano from './Piano';
@@ -19,6 +20,7 @@ import PracticeProgress from './PracticeProgress';
 type Runtime = { auth: ParentAuth; api: Api; config: AppConfig };
 type InstallEvent = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> };
 type View = 'learn' | 'history' | 'progress' | 'config';
+const MAX_QUESTION_LENGTH = 1200;
 
 function message(error: unknown) {
   return error instanceof Error ? error.message : 'The service could not complete this request.';
@@ -35,6 +37,7 @@ export default function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [setupIdentity, setSetupIdentity] = useState<{ provider: string; subject: string } | null>(null);
   const [lessonBusy, setLessonBusy] = useState(false);
+  const [hasDraft, setHasDraft] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
   const [install, setInstall] = useState<InstallEvent>();
   const [privacy, setPrivacy] = useState(false);
@@ -104,7 +107,7 @@ export default function App() {
   }
   async function signOut() {
     if (!runtime || authLock.current) return;
-    setInitialSessions(null); setRole(null); setError(''); setPrivacy(false); setSetupIdentity(null);
+    setInitialSessions(null); setRole(null); setError(''); setPrivacy(false); setSetupIdentity(null); setHasDraft(false);
     authLock.current = true; setAuthBusy(true);
     try { await runtime.auth.signOut(); }
     catch { setError(c.logoutError); }
@@ -121,8 +124,9 @@ export default function App() {
       <div className="header-actions">
         <label className="language-control"><span>{c.language}</span>
           <select value={language} disabled={lessonBusy} onChange={event => {
-            // Workspace owns lesson language; header sets the surrounding interface.
-            setLanguage(event.target.value as Language);
+            const next = event.target.value as Language;
+            if (next !== language && hasDraft && !window.confirm(c.discardDraft)) return;
+            setLanguage(next);
           }}>
             <option value="en">English</option><option value="nb">Norsk bokmål</option>
           </select>
@@ -133,7 +137,7 @@ export default function App() {
     {!online && <div className="notice" role="status">{c.offline}</div>}
     {error && <ErrorBanner text={error} dismiss={() => setError('')} label={c.dismiss} />}
     {initialSessions !== null && runtime
-      ? <Workspace api={runtime.api} role={role ?? 'student'} initialSessions={initialSessions} language={language} setLanguage={setLanguage} online={online} onBusyChange={setLessonBusy} />
+      ? <Workspace api={runtime.api} role={role ?? 'student'} initialSessions={initialSessions} language={language} setLanguage={setLanguage} online={online} onBusyChange={setLessonBusy} onDraftChange={setHasDraft} />
       : <main id="main" className="welcome-layout">
         <section className="welcome-copy">
           <p className="eyebrow">✦ {c.parent}</p>
@@ -183,9 +187,10 @@ export function ErrorBanner({ text, dismiss, label }: { text: string; dismiss():
     <button className="quiet" onClick={dismiss} aria-label={label}>×</button></div>;
 }
 
-export function Workspace({ api, initialSessions, language, setLanguage, online, onBusyChange, role = 'student' }: {
+export function Workspace({ api, initialSessions, language, setLanguage, online, onBusyChange, onDraftChange, role = 'student' }: {
   api: Api; initialSessions: Session[]; language: Language; setLanguage(language: Language): void; online: boolean;
   onBusyChange?(busy: boolean): void;
+  onDraftChange?(hasDraft: boolean): void;
   role?: Role;
 }) {
   const c = copy(language);
@@ -228,6 +233,8 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
   const textarea = useRef<HTMLTextAreaElement>(null);
   const lessonLanguage = useRef(language);
 
+  useEffect(() => { onDraftChange?.(!!draft.trim()); }, [draft, onDraftChange]);
+  useEffect(() => () => { onDraftChange?.(false); }, [onDraftChange]);
   useEffect(() => {
     onBusyChange?.(busy || toolBusy || preferencesBusy || mic !== 'off');
     return () => { onBusyChange?.(false); };
@@ -290,6 +297,7 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
   }
   function newSession(nextSubject = subject) {
     if (locked.current) return;
+    if (draft.trim() && !window.confirm(c.discardDraft)) return;
     cancelVoice(); setSubject(nextSubject);
     setSessionId(undefined); setDetail(null); setExchanges([]); setDraft(''); setStatus(''); setError('');
     setView('learn');
@@ -308,6 +316,7 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
     } finally { endRequest(controller); }
   }
   async function open(session: Session) {
+    if (draft.trim() && !window.confirm(c.discardDraft)) return;
     const controller = beginRequest(true);
     if (!controller) return;
     try {
@@ -323,7 +332,7 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
   async function send(event: FormEvent) {
     event.preventDefault();
     const text = draft.trim();
-    if (!text || paused || toolBusy || preferencesBusy || micRef.current !== 'off' || !online || needsRefresh) return;
+    if (!text || text.length > MAX_QUESTION_LENGTH || paused || toolBusy || preferencesBusy || micRef.current !== 'off' || !online || needsRefresh) return;
     const controller = beginRequest();
     if (!controller) return;
     const sentLanguage = language;
@@ -379,6 +388,23 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
     if (mutedRef.current) cancelVoice();
   }
   const disabled = busy || preferencesBusy || mic !== 'off' || paused;
+  const activityDisabled = disabled || toolBusy || needsRefresh;
+  function addToDraft(question: string) {
+    if (locked.current || micRef.current !== 'off' || activityDisabled) return;
+    const nextDraft = `${draft}${draft ? '\n\n' : ''}${question}`;
+    if (nextDraft.trim().length > MAX_QUESTION_LENGTH) { setError(c.draftFull); return; }
+    cancelVoice(); setDraft(nextDraft); textarea.current?.focus();
+  }
+  const currentSubject = subjectLabel(subject, language);
+  const starters = language === 'nb' ? [
+    { label: c.starterHint, question: `Kan du gi meg et hint om ${currentSubject} og stille meg ett spørsmål?` },
+    { label: c.starterPicture, question: `Kan du vise meg et enkelt visuelt eksempel på ${currentSubject} med tekst eller symboler?` },
+    { label: c.starterChallenge, question: `Kan du stille meg ett spørsmål om ${currentSubject} uten å si svaret først?` },
+  ] : [
+    { label: c.starterHint, question: `Can you give me a hint about ${currentSubject} and ask me one question?` },
+    { label: c.starterPicture, question: `Can you show me a simple visual example of ${currentSubject} using text or symbols?` },
+    { label: c.starterChallenge, question: `Can you ask me one question about ${currentSubject} without giving the answer first?` },
+  ];
   const counts = new Map<string, number>();
   sessions.forEach(session => counts.set(session.subject, (counts.get(session.subject) || 0) + 1));
   const utterances = [
@@ -433,38 +459,10 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
         </div>
         <div className="subject-picker" role="group" aria-label={c.subject}>
           {subjects.map(value => <button key={value} aria-pressed={subject === value} disabled={disabled || toolBusy}
-            onClick={() => newSession(value)}><span className="subject-icon" aria-hidden="true">{subjectIcons[value]}</span> {subjectLabel(value, language)}</button>)}
+            onClick={() => { if (value !== subject) newSession(value); }}><span className="subject-icon" aria-hidden="true">{subjectIcons[value]}</span> {subjectLabel(value, language)}</button>)}
         </div>
         <p className="qa-note">{c.qaNote}</p>
-        <section className="pace-panel" aria-label={c.breakOptions}>
-          <label className="encouragement-toggle"><input type="checkbox" checked={encouragement}
-            onChange={event => setEncouragement(event.target.checked)} />{c.encouragementOption}</label>
-          {encouragement && <p className="gentle-message">✦ {c.encouragement}</p>}
-          <div className="pace-actions">
-            <label>{c.breakReminder}<select value={breakMinutes} onChange={event => {
-              setBreakMinutes(event.target.value); setBreakSuggested(false);
-            }}><option value="off">{c.noTimer}</option><option value="10">{c.tenMinutes}</option><option value="15">{c.fifteenMinutes}</option></select></label>
-            <button type="button" disabled={busy || toolBusy || preferencesBusy} onClick={() => {
-              cancelVoice(); setPaused(value => !value); setBreakSuggested(false); setSessionClock(value => value + 1);
-            }}>{paused ? c.resume : c.pause}</button>
-          </div>
-          <p className="small">{c.paceNote}</p>
-          <GentleCheckIn language={language} paused={paused} onBreak={() => { cancelVoice(); setPaused(true); }} />
-          {breakSuggested && !paused && <div className="notice" role="status"><p>{c.breakSuggestion}</p>
-            <button type="button" onClick={() => setBreakSuggested(false)}>{c.dismissBreak}</button></div>}
-          {paused && <div className="break-card" role="status"><h2>{c.pausedTitle}</h2><p>{c.pausedBody}</p></div>}
-        </section>
-        {subject === 'otherLanguages' && <p className="notice language-invite">{c.languageInvite}</p>}
-        {subject === 'piano' && <Piano api={api} language={language} disabled={disabled || plannerBusy || quizBusy} online={online} onBusyChange={setPianoBusy} />}
-        {subject === 'maths' && <FractionExplorer language={language} disabled={disabled || needsRefresh}
-          onAsk={question => {
-            if (locked.current || micRef.current !== 'off' || needsRefresh) return;
-            const nextDraft = `${draft}${draft ? '\n\n' : ''}${question}`;
-            if (nextDraft.length > 8000) { setError(c.draftFull); return; }
-            cancelVoice(); setDraft(nextDraft); textarea.current?.focus();
-          }} />}
-        <Quiz key={`${subject}-${language}`} api={api} subject={subject} language={language}
-          disabled={disabled || pianoBusy || plannerBusy || needsRefresh} online={online} onBusyChange={setQuizBusy} />
+        <a className="activity-link" href="#learning-activities">{c.activities} ↓</a>
         <div className="conversation" role="region" tabIndex={0}
           aria-label={language === 'nb' ? 'Samtale' : 'Conversation'} aria-busy={busy}>
           {!utterances.length && <div className="empty-conversation">
@@ -488,10 +486,17 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
           <div ref={transcriptEnd} />
         </div>
         <form className="composer" onSubmit={event => void send(event)}>
+          <div className="starters">
+            <p>{c.starterTitle}</p>
+            <div>{starters.map(starter => <button key={starter.label} type="button"
+              disabled={activityDisabled} onClick={() => addToDraft(starter.question)}>{starter.label}</button>)}</div>
+            <p className="small">{c.starterReview}</p>
+          </div>
           <label htmlFor="question">{c.ask}</label>
           <textarea id="question" ref={textarea} value={draft} maxLength={8000} rows={3}
             placeholder={c.placeholder} disabled={disabled || needsRefresh}
             onChange={event => setDraft(event.target.value)} />
+          {draft.trim().length > MAX_QUESTION_LENGTH && <p className="notice" role="status">{c.messageTooLong}</p>}
           <div className="composer-actions">
             <button type="button" className={`talk-button ${mic === 'listening' ? 'recording' : ''}`}
               disabled={busy || toolBusy || preferencesBusy || paused || !online || needsRefresh}
@@ -511,11 +516,44 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
               onKeyUp={event => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); stopTalking(); } }}>
               <span aria-hidden="true">♩</span> {mic === 'listening' ? c.listening : mic === 'finishing' ? c.finalizing : c.talk}
             </button>
-            <button className="primary" type="submit" disabled={disabled || toolBusy || !online || !draft.trim() || needsRefresh}>{busy ? c.sending : c.send} <span aria-hidden="true">↗</span></button>
+            <button className="primary" type="submit" disabled={disabled || toolBusy || !online || !draft.trim() ||
+              draft.trim().length > MAX_QUESTION_LENGTH || needsRefresh}>{busy ? c.sending : c.send} <span aria-hidden="true">↗</span></button>
           </div>
           <div className="mic-status" role="status"><span className={`mic-dot ${mic === 'listening' ? 'on' : ''}`} />{mic === 'listening' ? c.micOn : c.micOff}</div>
           <p className="small" id="voice-help">{c.voiceNote}</p>
         </form>
+        <section className="pace-panel" aria-label={c.breakOptions}>
+          <label className="encouragement-toggle"><input type="checkbox" checked={encouragement}
+            onChange={event => setEncouragement(event.target.checked)} />{c.encouragementOption}</label>
+          {encouragement && <p className="gentle-message">✦ {c.encouragement}</p>}
+          <div className="pace-actions">
+            <label>{c.breakReminder}<select value={breakMinutes} onChange={event => {
+              setBreakMinutes(event.target.value); setBreakSuggested(false);
+            }}><option value="off">{c.noTimer}</option><option value="10">{c.tenMinutes}</option><option value="15">{c.fifteenMinutes}</option></select></label>
+            <button type="button" disabled={busy || toolBusy || preferencesBusy} onClick={() => {
+              cancelVoice(); setPaused(value => !value); setBreakSuggested(false); setSessionClock(value => value + 1);
+            }}>{paused ? c.resume : c.pause}</button>
+          </div>
+          <p className="small">{c.paceNote}</p>
+          <GentleCheckIn language={language} paused={paused} onBreak={() => { cancelVoice(); setPaused(true); }} />
+          {breakSuggested && !paused && <div className="notice" role="status"><p>{c.breakSuggestion}</p>
+            <button type="button" onClick={() => setBreakSuggested(false)}>{c.dismissBreak}</button></div>}
+          {paused && <div className="break-card" role="status"><h2>{c.pausedTitle}</h2><p>{c.pausedBody}</p></div>}
+        </section>
+        <section id="learning-activities" className="learning-activities" aria-labelledby="activities-title">
+          <div className="activities-intro"><h2 id="activities-title">{c.activities}</h2><p className="small">{c.activitiesNote}</p></div>
+          {subject === 'otherLanguages' && <p className="notice language-invite">{c.languageInvite}</p>}
+          {subject === 'piano' && <Piano api={api} language={language} disabled={disabled || plannerBusy || quizBusy} online={online} onBusyChange={setPianoBusy} />}
+          {subject === 'maths' && <>
+            <ArrayExplorer language={language} disabled={activityDisabled} onAsk={addToDraft} />
+            <FractionExplorer language={language} disabled={activityDisabled} onAsk={addToDraft} />
+          </>}
+          {(subject === 'english' || subject === 'norwegian') && <SentenceBuilder key={subject} subject={subject}
+            language={language} disabled={activityDisabled} onAsk={addToDraft} />}
+          {subject === 'science' && <WaterCycle language={language} disabled={activityDisabled} onAsk={addToDraft} />}
+          <Quiz key={`${subject}-${language}`} api={api} subject={subject} language={language}
+            disabled={disabled || pianoBusy || plannerBusy || needsRefresh} online={online} onBusyChange={setQuizBusy} />
+        </section>
       </section>
     </div> : <section className="records-panel">
       <div className="records-heading"><div>

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Workspace } from './App';
 import { Api, type Session } from './api';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 vi.mock('./Teacher', () => ({ default: () => <div>Animation test placeholder</div> }));
 vi.mock('./speech', () => ({
@@ -74,6 +74,24 @@ describe('learning state', () => {
     expect(api.sessions).not.toHaveBeenCalled();
     expect(screen.getByRole('textbox')).toHaveFocus();
   });
+  it('adds a subject-specific starter to the draft without sending, and keeps within the backend question limit', async () => {
+    const chat = vi.fn();
+    await setup(chat);
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: 'My idea.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ask me a question' }));
+    expect((input as HTMLTextAreaElement).value).toContain('one question about Maths');
+    expect(input).toHaveFocus();
+    expect(chat).not.toHaveBeenCalled();
+    fireEvent.change(input, { target: { value: 'x'.repeat(1201) } });
+    expect(screen.getByText(/at most 1,200 characters/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Send question/ })).toBeDisabled();
+    fireEvent.change(input, { target: { value: 'x'.repeat(1190) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Give me a hint' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Your draft is too long');
+    expect(input).toHaveValue('x'.repeat(1190));
+    expect(chat).not.toHaveBeenCalled();
+  });
   it('preserves a full draft instead of silently truncating it to add a visual question', async () => {
     const chat = vi.fn();
     await setup(chat);
@@ -83,6 +101,35 @@ describe('learning state', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Your draft is too long');
     expect(screen.getByRole('textbox')).toHaveValue(text);
     expect(chat).not.toHaveBeenCalled();
+  });
+  it('protects an unsent question when changing subjects or starting a new session', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    await setup(vi.fn());
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: 'Keep my question' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Maths' }));
+    expect(confirm).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Science' }));
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(input).toHaveValue('Keep my question');
+    expect(screen.getByRole('button', { name: 'Maths' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: /New session/ }));
+    expect(input).toHaveValue('Keep my question');
+    confirm.mockReturnValue(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Science' }));
+    expect(screen.getByRole('textbox')).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Science' })).toHaveAttribute('aria-pressed', 'true');
+  });
+  it('does not open a saved session when discarding the draft is declined', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const api = await setup(vi.fn());
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Keep my question' } });
+    fireEvent.click(screen.getByRole('button', { name: /Sessions/ }));
+    const card = (await screen.findByText('Backend fixture summary')).closest('article')!;
+    fireEvent.click(within(card).getByRole('button', { name: /Continue/ }));
+    expect(api.session).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /Learn/ }));
+    expect(screen.getByRole('textbox')).toHaveValue('Keep my question');
   });
   it('retains the last complete snapshot and labels it stale when refresh fails', async () => {
     const api = await setup(vi.fn());

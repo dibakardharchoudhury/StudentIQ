@@ -80,6 +80,34 @@ summary:focus-visible { outline: 3px solid var(--cp-accent); outline-offset: 4px
 .subject-picker [aria-pressed="true"] { border-color: var(--cp-accent); color: var(--cp-accent); background: var(--cp-accent-soft); }
 .subject-icon { font-size: 1.1rem; display: inline-block; min-width: 20px; margin-right: 4px; }
 .qa-note { padding: 16px 24px 0; margin-bottom: 12px; font-size: .875rem; color: var(--cp-text-soft); }
+.activity-link { display: inline-block; margin: 0 24px 8px; font-size: .875rem; }
+.learning-activities { padding: 4px 0 20px; border-top: 1px solid var(--cp-border); }
+.activities-intro { margin: 20px 24px 0; }
+.activities-intro h2 { margin-bottom: 4px; }
+.activities-intro p { margin-bottom: 0; }
+.visual-activity { margin: 20px 24px 0; padding: 20px; border: 1px solid var(--cp-border); border-radius: 16px; background: var(--cp-bg-elevated); }
+.visual-activity h3 { margin: 0 0 12px; font-size: 1rem; }
+.activity-controls { display: flex; flex-wrap: wrap; gap: 12px; border: 0; padding: 0; margin: 0 0 16px; }
+.activity-controls label { display: flex; flex: 1 1 130px; flex-direction: column; gap: 4px; font-size: .875rem; }
+.array-grid { display: grid; gap: 4px; width: min(100%, 400px); padding: 12px; border: 1px solid var(--cp-border); border-radius: .625rem; background: var(--cp-surface); }
+.array-grid span { display: grid; place-items: center; aspect-ratio: 1; color: var(--cp-accent); font-size: clamp(.85rem, 3vw, 1.4rem); line-height: 1; }
+.visual-activity form label { display: block; font-size: .875rem; font-weight: 600; }
+.activity-answer { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
+.activity-answer input { width: 100px; min-height: 44px; padding: 8px; border: 1px solid var(--cp-border-strong); border-radius: .625rem; background: var(--cp-surface); color: var(--cp-text); }
+.activity-feedback { padding: 12px; border-radius: .625rem; background: var(--cp-accent-soft); }
+.sentence-preview { display: flex; flex-wrap: wrap; gap: 8px; }
+.sentence-preview span { padding: 10px 12px; border: 1px solid var(--cp-border); border-radius: .625rem; background: var(--cp-surface); font-weight: 600; }
+.cycle-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.cycle-steps button { display: flex; min-width: 0; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; font-size: .75rem; overflow-wrap: anywhere; }
+.cycle-steps button > span:first-child { font-size: 1.6rem; color: var(--cp-accent); }
+.cycle-steps button[aria-pressed="true"] { border-color: var(--cp-accent); background: var(--cp-accent-soft); }
+.cycle-description { margin: 12px 0; padding: 12px; border-left: 3px solid var(--cp-accent); }
+.cycle-description p { margin: 4px 0 0; }
+.starters { margin-bottom: 16px; }
+.starters > p:first-child { margin-bottom: 8px; font-weight: 600; }
+.starters > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.starters button { font-size: .8125rem; padding: 6px 12px; }
+.starters .small { margin: 8px 0 0; }
 .pace-panel { margin: 0 24px 20px; padding: 16px; border: 1px solid var(--cp-border); border-radius: 16px; background: var(--cp-bg-elevated); }
 .encouragement-toggle, .piano-options > label { display: flex; align-items: center; gap: 8px; font-size: .8125rem; }
 input[type="checkbox"] { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--cp-accent); }
@@ -239,6 +267,10 @@ footer > .small { flex-basis: 100%; font-size: .6875rem; }
   .lesson-heading, .composer { padding: 20px 16px; }
   .subject-picker { padding: 0 16px 16px; }
   .fraction-explorer { margin: 16px 16px 0; padding: 16px; }
+  .visual-activity { margin: 16px 16px 0; padding: 16px; }
+  .activities-intro { margin: 16px 16px 0; }
+  .activity-link { margin-left: 16px; margin-right: 16px; }
+  .cycle-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pace-panel, .piano-panel { margin: 16px; padding: 16px; }
   .quiz-panel { margin: 16px; padding: 12px 16px; }
   .qa-note { padding-left: 16px; padding-right: 16px; }

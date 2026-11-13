@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
 const state = vi.hoisted(() => ({ sessions: vi.fn(), me: vi.fn(), signIn: vi.fn(), signOut: vi.fn() }));
@@ -21,6 +21,7 @@ beforeEach(() => {
   state.me.mockReset(); state.me.mockResolvedValue({ role: 'student' });
   state.signIn.mockResolvedValue(undefined); state.signOut.mockResolvedValue(undefined);
 });
+afterEach(() => vi.restoreAllMocks());
 
 describe('parent backend authorization gate', () => {
   it('does not open the workspace when Microsoft sign-in succeeds but the backend rejects the parent', async () => {
@@ -77,5 +78,22 @@ describe('parent backend authorization gate', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Administrator sign-in/ }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Role unavailable');
     expect(screen.queryByRole('button', { name: /Configuration/ })).not.toBeInTheDocument();
+  });
+  it('asks before clearing an unsent question when changing interface language', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    state.sessions.mockResolvedValue([]);
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: /Administrator sign-in/ }));
+    const input = await screen.findByRole('textbox');
+    fireEvent.change(input, { target: { value: 'Keep my question' } });
+    const language = screen.getByRole('combobox', { name: 'Learning language' });
+    fireEvent.change(language, { target: { value: 'nb' } });
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(language).toHaveValue('en');
+    expect(input).toHaveValue('Keep my question');
+    confirm.mockReturnValue(true);
+    fireEvent.change(language, { target: { value: 'nb' } });
+    expect(screen.getByRole('textbox')).toHaveValue('');
+    expect(language).toHaveValue('nb');
   });
 });
