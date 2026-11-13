@@ -23,16 +23,29 @@ gaze. Learning scores are based on recorded practice, not attention.
 
 ## Learning activities
 
-The lesson puts the conversation and optional question starters before the
-activity area. Learners can explore multiplication with a dot array, build
-English or Norwegian sentences, and select stages of the water cycle. The
-existing fraction explorer, piano and optional quizzes remain available.
-The new visual activities run locally, use no additional model calls, and do
-not save attempts or award grades. Their teacher buttons only add a question
+The lesson puts visual missions and conversation before the activity area.
+Learners can explore multiplication with a dot array, build English or
+Norwegian sentences, and select stages of the water cycle. The existing
+fraction explorer and piano remain available. These local explorers use no
+additional model calls and do not save attempts or award grades. Their teacher
+buttons only add a question
 to the draft; the learner reviews and sends it explicitly. Conversation,
 quiz and piano practice history continue to be saved by the backend as before.
 Changing subjects or language, starting a new session, or opening an old one
 asks before clearing an unsent question.
+
+Visual missions are optional AI-generated four-choice questions with playful
+stories and bounded visual clues. Maths uses arrays or fraction bars; other
+supported subjects use labelled cards, not generated maps or images. When
+voice is enabled the avatar reads the question and explanation, and the learner
+can replay, request a hint or skip. A question is stored when generated; an
+answer is stored only when submitted. Recent questions and maths visual layouts
+reduce repetition, and bounded previous conversation notes can guide the topic;
+neither guarantees mastery or novelty. The service checks maths visual answers
+against the picture, but AI content can still be wrong. Live current-affairs
+missions are unavailable without a verified source. Each mission makes a model
+call and voice narration uses Speech; both may incur charges and are subject
+to the existing quotas.
 
 The deployed Azure resources are in `rg-studentiq-20261113` in Norway East.
 The Entra application registration is a tenant-level directory object and cannot

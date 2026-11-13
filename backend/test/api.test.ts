@@ -707,6 +707,27 @@ test("quiz generation shares the model quota and unsupported current affairs nev
   assert.equal(generated, 1);
 });
 
+test("visual quiz generation receives bounded earlier conversation context for the selected subject", async () => {
+  const deps = dependencies(async () => config.parentOid);
+  const ops = createOperations();
+  const chat = request("chat", { method: "POST", body: JSON.stringify({
+    subject: "norwegian", language: "en", message: "How do Norwegian verbs work?"
+  }) });
+  assert.equal((await dispatch(chat, ops.chat, deps)).status, 200);
+  const original = deps.quizGenerator;
+  let context: { subjectSummary: string; recentQuestions: string[] } | undefined;
+  deps.quizGenerator = { generate: async (input, recent, prior) => {
+    context = prior;
+    return original.generate(input, recent, prior);
+  } };
+  const result = await dispatch(request("quiz", {
+    method: "POST", body: JSON.stringify({ subject: "norwegian", language: "en" })
+  }), ops.createQuiz, deps);
+  assert.equal(result.status, 200);
+  assert.ok(context?.recentQuestions.includes("How do Norwegian verbs work?"));
+  assert.ok(context.subjectSummary.length <= 1200);
+});
+
 test("quiz storage and model errors never fabricate questions or grades", async () => {
   const deps = dependencies(async () => config.parentOid);
   const blobs = new MemoryBlobStore();

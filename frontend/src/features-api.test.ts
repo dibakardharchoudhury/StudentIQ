@@ -63,6 +63,13 @@ describe('piano and quiz contracts', () => {
     expect(fetchMock.mock.calls[1][0]).toBe('https://test.example/api/quiz/quiz%2F1/answer');
     expect(JSON.parse(fetchMock.mock.calls[1][1]!.body as string)).toEqual({ answerIndex: 0 });
   });
+  it('rejects unsupported or oversized visual scenes instead of rendering them', async () => {
+    const base = { id: 'quiz', question: 'Fixture?', options: ['a', 'b', 'c', 'd'] };
+    fetchMock.mockResolvedValueOnce(json({ ...base, visual: { kind: 'array', rows: 9, columns: 2, icon: 'star' } }));
+    await expect(api().quiz('maths', 'en')).rejects.toThrow('visual');
+    fetchMock.mockResolvedValueOnce(json({ ...base, visual: { kind: 'cards', style: 'timeline', items: ['One', 'Two'], html: '<script>' } }));
+    await expect(api().quiz('history', 'en')).rejects.toThrow('visual');
+  });
   it('loads all persisted quiz attempts without silently returning a failed prefix', async () => {
     const attempt = { id: 'quiz-attempt', subject: 'geography', question: 'Fixture?', correct: true, at };
     fetchMock.mockResolvedValueOnce(json({ attempts: [attempt], nextCursor: 'next' }))

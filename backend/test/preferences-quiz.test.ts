@@ -4,7 +4,7 @@ import { InputValidationError, validatePreferences, type BlobValue, type JsonBlo
 import { PreferencesRepository, readPreferenceDefaults } from "../src/preferences.js";
 import {
   QuizRepository, QuizAnswerConflictError, QuizDuplicateError, QuizNotFoundError,
-  UnsupportedQuizSubjectError, validateGeneratedQuiz, validateQuizAnswer, validateQuizInput,
+  UnsupportedQuizSubjectError, validateGeneratedQuiz, validateQuizAnswer, validateQuizInput, chooseMathVisual,
   type GeneratedQuiz
 } from "../src/quiz.js";
 
@@ -125,6 +125,33 @@ test("quiz keys stay private on creation; durable answers are actual, immutable 
   await assert.rejects(restarted.answer(parent, created.id, 1), QuizAnswerConflictError);
   await assert.rejects(restarted.answer(otherFamily, created.id, 0), QuizNotFoundError);
   assert.deepEqual((await restarted.attempts(otherFamily)).items, []);
+});
+
+test("visual quiz scenes are bounded, stored with the question, and do not reveal its answer", async () => {
+  const visual = { kind: "array", rows: 2, columns: 3, icon: "star" } as const;
+  const blobs = new MemoryBlobStore();
+  const repository = new QuizRepository(blobs);
+  const created = await repository.create(parent, input, { ...generated, visual });
+  assert.deepEqual(created.visual, visual);
+  assert.equal("correctIndex" in created, false);
+  assert.deepEqual((await new QuizRepository(blobs).answer(parent, created.id, 1)).correct, true);
+  assert.deepEqual((await repository.recent(parent, input)).visuals, [visual]);
+  await assert.rejects(repository.create(parent, input, { ...generated, question: "Count this new-looking grid?", visual: { ...visual, icon: "apple" } }), QuizDuplicateError);
+  for (let index = 0; index < 20; index++) {
+    const choice = chooseMathVisual([visual]);
+    assert.ok(choice.kind !== "array" || choice.rows !== visual.rows || choice.columns !== visual.columns);
+  }
+  const cards = { kind: "cards", style: "timeline", items: ["Before", "After"] } as const;
+  assert.deepEqual(validateGeneratedQuiz({ ...generated, visual: cards }).visual, cards);
+  assert.deepEqual(validateGeneratedQuiz({ ...generated, visual: { kind: "fraction", parts: 8, filled: 3 } }).visual,
+    { kind: "fraction", parts: 8, filled: 3 });
+  for (const invalid of [
+    { ...visual, rows: 0 }, { ...visual, columns: 9 }, { ...visual, icon: "url" },
+    { ...visual, script: "bad" }, { kind: "cards", style: "timeline", items: ["Only one"] },
+    { kind: "fraction", parts: 2, filled: 3 },
+    { kind: "cards", style: "places", items: ["Safe", "<script>"] },
+    { kind: "cards", style: "words", items: ["Safe", "https://example.test"] }
+  ]) assert.throws(() => validateGeneratedQuiz({ ...generated, visual: invalid }));
 });
 
 test("recent fingerprints suppress normalized and competing duplicate questions without automatic extra generation", async () => {

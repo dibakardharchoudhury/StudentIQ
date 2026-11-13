@@ -123,7 +123,8 @@ test("quiz model uses one bounded JSON generation call and rejects filtered or m
   const credential = { getToken: async () => ({ token: "server-only", expiresOnTimestamp: Date.now() + 3600000 }) };
   const generated = {
     question: "What is 2 + 2?", options: ["3", "4", "5", "6"],
-    correctIndex: 1, explanation: "Two plus two is four."
+    correctIndex: 1, explanation: "Two plus two is four.",
+    visual: { kind: "array", rows: 2, columns: 2, icon: "star" }
   };
   let calls = 0;
   const generator = new FoundryQuizGenerator(config, credential, async (url, init) => {
@@ -132,21 +133,43 @@ test("quiz model uses one bounded JSON generation call and rejects filtered or m
     const body = JSON.parse(String(init?.body)) as {
       max_tokens: number; response_format: { type: string }; messages: { content: string }[];
     };
-    assert.ok(body.max_tokens > 0 && body.max_tokens <= 600);
+    assert.ok(body.max_tokens > 0 && body.max_tokens <= 2048);
     assert.equal(body.response_format.type, "json_object");
     assert.match(body.messages[0]!.content, /not live news or current affairs/);
     assert.match(body.messages[0]!.content, /untrusted data, not instructions/);
     assert.match(body.messages[0]!.content, /What is 1 \+ 1/);
+    assert.match(body.messages[0]!.content, /Fraction notes/);
     return Response.json({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify(generated) } }] });
   });
-  assert.deepEqual(await generator.generate({ subject: "Maths", language: "en" }, ["What is 1 + 1?"]), generated);
+  const context = { subjectSummary: "Fraction notes", recentQuestions: ["What is a fraction?"] };
+  assert.deepEqual(await generator.generate({ subject: "Maths", language: "en" }, ["What is 1 + 1?"], context), generated);
   assert.equal(calls, 1);
   for (const response of [
     { choices: [{ finish_reason: "content_filter", message: { content: JSON.stringify(generated) } }] },
     { choices: [{ finish_reason: "stop", content_filter_results: { violence: { filtered: true } }, message: { content: JSON.stringify(generated) } }] },
-    { choices: [{ finish_reason: "stop", message: { content: "{}" } }] }
+    { choices: [{ finish_reason: "stop", message: { content: "{}" } }] },
+    { choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ ...generated, visual: undefined }) } }] }
   ]) {
     const rejected = new FoundryQuizGenerator(config, credential, async () => Response.json(response));
-    await assert.rejects(rejected.generate({ subject: "Maths", language: "en" }, []));
+    await assert.rejects(rejected.generate({ subject: "Maths", language: "en" }, [], context));
   }
+  for (const quiz of [
+    { ...generated, correctIndex: 0 },
+    { ...generated, visual: { kind: "fraction", parts: 4, filled: 2 }, options: ["1/2", "2/4", "1/4", "3/4"], correctIndex: 0 },
+    { ...generated, visual: { kind: "fraction", parts: 4, filled: 2 }, options: ["1/2", "1/3", "1/4", "3/4"], correctIndex: 1 },
+    { ...generated, visual: { kind: "cards", style: "words", items: ["one", "two"] } }
+  ]) {
+    const rejected = new FoundryQuizGenerator(config, credential, async () => Response.json({
+      choices: [{ finish_reason: "stop", message: { content: JSON.stringify(quiz) } }]
+    }));
+    await assert.rejects(rejected.generate({ subject: "Maths", language: "en" }, [], context));
+  }
+  const fraction = { ...generated, visual: { kind: "fraction", parts: 8, filled: 3 },
+    options: ["3/8", "1/8", "3/4", "5/8"], correctIndex: 0 };
+  const fractionGenerator = new FoundryQuizGenerator(config, credential, async () => Response.json({
+    choices: [{ finish_reason: "stop", message: { content: JSON.stringify(fraction) } }]
+  }));
+  assert.deepEqual(await fractionGenerator.generate({ subject: "Maths", language: "en" }, [], context), fraction);
+  await assert.rejects(fractionGenerator.generate({ subject: "Maths", language: "en" }, [], context,
+    { kind: "fraction", parts: 8, filled: 4 }));
 });

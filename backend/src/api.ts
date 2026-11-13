@@ -33,7 +33,7 @@ import type { SocialAuth } from "./social-auth.js";
 import type { SocialDirectory } from "./social-directory.js";
 import {
   QuizRepository, QuizAnswerConflictError, QuizDuplicateError, QuizNotFoundError,
-  UnsupportedQuizSubjectError, validateQuizInput, validateQuizAnswer, type QuizGenerator
+  UnsupportedQuizSubjectError, validateQuizInput, validateQuizAnswer, chooseMathVisual, type QuizGenerator
 } from "./quiz.js";
 
 const MAX_BODY_BYTES = 8 * 1024;
@@ -272,15 +272,20 @@ export function createOperations() {
     }
   };
 
-  const createQuiz: Operation = async (request, _principalOid, { config, quiz, quizGenerator, quota }) => {
+  const createQuiz: Operation = async (request, _principalOid, { config, quiz, quizGenerator, quota, repository }) => {
     const input = validateQuizInput(await readJson(request));
     let category: ErrorCategory = "context";
     try {
-      const recent = await quiz.recentQuestions(config.parentOid, input);
+      const contextSubject = ({ Norsk: "norwegian", Spanish: "otherLanguages", French: "otherLanguages", German: "otherLanguages" } as Record<string, string>)[input.subject] ?? input.subject.toLowerCase();
+      const [recent, context] = await Promise.all([
+        quiz.recent(config.parentOid, input),
+        repository.loadContext(config.parentOid, undefined, contextSubject, input.language)
+      ]);
       category = "quota-unavailable";
       await quota.consume(config.parentOid, "chat");
       category = "model";
-      const generated = await quizGenerator.generate(input, recent);
+      const target = input.subject === "Maths" ? chooseMathVisual(recent.visuals) : undefined;
+      const generated = await quizGenerator.generate(input, recent.questions, context, target);
       category = "persistence";
       return json(200, await quiz.create(config.parentOid, input, generated));
     } catch (error) {

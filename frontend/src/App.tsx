@@ -463,6 +463,15 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
         </div>
         <p className="qa-note">{c.qaNote}</p>
         <a className="activity-link" href="#learning-activities">{c.activities} ↓</a>
+        <Quiz key={`${subject}-${language}`} api={api} subject={subject} language={language}
+          disabled={disabled || pianoBusy || plannerBusy || needsRefresh} online={online} onBusyChange={setQuizBusy}
+          onAsk={addToDraft} onStop={cancelVoice} voiceEnabled={!muted} onSpeak={text => {
+            if (!mutedRef.current && online && !paused) {
+              void speech.current?.say(text, language, preferences?.voice ?? 'default').catch(error => {
+                if (alive.current) setError(`${c.voiceError} ${message(error)}`);
+              });
+            }
+          }} />
         <div className="conversation" role="region" tabIndex={0}
           aria-label={language === 'nb' ? 'Samtale' : 'Conversation'} aria-busy={busy}>
           {!utterances.length && <div className="empty-conversation">
@@ -551,8 +560,6 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
           {(subject === 'english' || subject === 'norwegian') && <SentenceBuilder key={subject} subject={subject}
             language={language} disabled={activityDisabled} onAsk={addToDraft} />}
           {subject === 'science' && <WaterCycle language={language} disabled={activityDisabled} onAsk={addToDraft} />}
-          <Quiz key={`${subject}-${language}`} api={api} subject={subject} language={language}
-            disabled={disabled || pianoBusy || plannerBusy || needsRefresh} online={online} onBusyChange={setQuizBusy} />
         </section>
       </section>
     </div> : <section className="records-panel">

@@ -39,7 +39,16 @@ const preferencesSchema = z.object({
   voice: z.enum(['default', 'alternate']),
   mood: z.enum(['gentle', 'cheerful', 'calm']),
 });
-const quizSchema = z.object({ id, question: z.string().min(1), options: z.array(z.string().min(1)).length(4) });
+const quizVisualSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('array'), rows: z.number().int().min(1).max(8), columns: z.number().int().min(1).max(8),
+    icon: z.enum(['star', 'apple', 'leaf', 'note', 'drop']) }).strict(),
+  z.object({ kind: z.literal('fraction'), parts: z.number().int().min(2).max(12), filled: z.number().int().min(0).max(12) }).strict()
+    .refine(visual => visual.filled <= visual.parts, { path: ['filled'] }),
+  z.object({ kind: z.literal('cards'), style: z.enum(['sequence', 'timeline', 'words', 'places']),
+    items: z.array(z.string().trim().min(1).max(48)).min(2).max(4) }).strict(),
+]);
+const quizSchema = z.object({ id, question: z.string().min(1), options: z.array(z.string().min(1)).length(4),
+  visual: quizVisualSchema.optional() });
 const quizAnswerSchema = z.object({
   correct: z.boolean(), correctIndex: z.number().int().min(0).max(3), explanation: z.string(),
 });

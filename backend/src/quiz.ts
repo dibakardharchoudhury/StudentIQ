@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomInt, randomUUID } from "node:crypto";
 import {
   InputValidationError, subjectKey, type HistoryPage, type JsonBlobStore, type Language
 } from "./contracts.js";
@@ -9,11 +9,17 @@ export interface QuizInput {
   language: Language;
 }
 
+export type QuizVisual =
+  | { kind: "array"; rows: number; columns: number; icon: "star" | "apple" | "leaf" | "note" | "drop" }
+  | { kind: "fraction"; parts: number; filled: number }
+  | { kind: "cards"; style: "sequence" | "timeline" | "words" | "places"; items: string[] };
+
 export interface GeneratedQuiz {
   question: string;
   options: [string, string, string, string];
   correctIndex: number;
   explanation: string;
+  visual?: QuizVisual;
 }
 
 export interface QuizRecord extends GeneratedQuiz, QuizInput {
@@ -24,11 +30,11 @@ export interface QuizRecord extends GeneratedQuiz, QuizInput {
 }
 
 interface QuizMemory {
-  recent: { question: string; fingerprint: string }[];
+  recent: { question: string; fingerprint: string; visual?: QuizVisual }[];
 }
 
 export interface QuizGenerator {
-  generate(input: QuizInput, recentQuestions: string[]): Promise<GeneratedQuiz>;
+  generate(input: QuizInput, recentQuestions: string[], context: { subjectSummary: string; recentQuestions: string[] }, targetVisual?: QuizVisual): Promise<GeneratedQuiz>;
 }
 
 export class UnsupportedQuizSubjectError extends Error {}
@@ -66,10 +72,33 @@ function plainString(value: unknown, maximum: number): value is string {
     !/[\u0000-\u001f\u007f]|<[^>]*>|https?:\/\/|www\./i.test(value);
 }
 
+function validateVisual(value: unknown): QuizVisual {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid quiz visual.");
+  const visual = value as Record<string, unknown>;
+  if (visual.kind === "array" && Object.keys(visual).every((key) => ["kind", "rows", "columns", "icon"].includes(key)) &&
+      Number.isInteger(visual.rows) && Number(visual.rows) >= 1 && Number(visual.rows) <= 8 &&
+      Number.isInteger(visual.columns) && Number(visual.columns) >= 1 && Number(visual.columns) <= 8 &&
+      typeof visual.icon === "string" && ["star", "apple", "leaf", "note", "drop"].includes(visual.icon)) {
+    return { kind: "array", rows: Number(visual.rows), columns: Number(visual.columns), icon: visual.icon as Extract<QuizVisual, { kind: "array" }>["icon"] };
+  }
+  if (visual.kind === "fraction" && Object.keys(visual).every((key) => ["kind", "parts", "filled"].includes(key)) &&
+      Number.isInteger(visual.parts) && Number(visual.parts) >= 2 && Number(visual.parts) <= 12 &&
+      Number.isInteger(visual.filled) && Number(visual.filled) >= 0 && Number(visual.filled) <= Number(visual.parts)) {
+    return { kind: "fraction", parts: Number(visual.parts), filled: Number(visual.filled) };
+  }
+  if (visual.kind === "cards" && Object.keys(visual).every((key) => ["kind", "style", "items"].includes(key)) &&
+      typeof visual.style === "string" && ["sequence", "timeline", "words", "places"].includes(visual.style) &&
+      Array.isArray(visual.items) && visual.items.length >= 2 && visual.items.length <= 4 &&
+      visual.items.every((item) => plainString(item, 48))) {
+    return { kind: "cards", style: visual.style as Extract<QuizVisual, { kind: "cards" }>["style"], items: visual.items.map((item: string) => item.trim()) };
+  }
+  throw new Error("Invalid quiz visual.");
+}
+
 export function validateGeneratedQuiz(value: unknown): GeneratedQuiz {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid generated quiz.");
   const quiz = value as Record<string, unknown>;
-  if (Object.keys(quiz).some((key) => !["question", "options", "correctIndex", "explanation"].includes(key)) ||
+  if (Object.keys(quiz).some((key) => !["question", "options", "correctIndex", "explanation", "visual"].includes(key)) ||
       !plainString(quiz.question, 320) || !plainString(quiz.explanation, 600) ||
       !Array.isArray(quiz.options) || quiz.options.length !== 4 ||
       !quiz.options.every((option) => plainString(option, 160)) ||
@@ -79,7 +108,8 @@ export function validateGeneratedQuiz(value: unknown): GeneratedQuiz {
   }
   return {
     question: quiz.question.trim(), options: quiz.options.map((option: string) => option.trim()) as GeneratedQuiz["options"],
-    correctIndex: quiz.correctIndex as number, explanation: quiz.explanation.trim()
+    correctIndex: quiz.correctIndex as number, explanation: quiz.explanation.trim(),
+    ...(quiz.visual === undefined ? {} : { visual: validateVisual(quiz.visual) })
   };
 }
 
@@ -105,6 +135,31 @@ export function quizFingerprint(question: string): string {
     .replace(/[^\p{L}\p{N}]+/gu, " ").trim()).digest("hex");
 }
 
+function mathsVisualKey(visual: QuizVisual | undefined): string | undefined {
+  if (visual?.kind === "array") return `array:${visual.rows}:${visual.columns}`;
+  if (visual?.kind === "fraction") return `fraction:${visual.parts}:${visual.filled}`;
+  return undefined;
+}
+
+export function chooseMathVisual(recent: QuizVisual[]): QuizVisual {
+  const used = new Set(recent.map(mathsVisualKey));
+  const candidates: QuizVisual[] = [];
+  for (let rows = 2; rows <= 6; rows++) for (let columns = 2; columns <= 6; columns++) {
+    candidates.push({ kind: "array", rows, columns, icon: "star" });
+  }
+  for (let parts = 2; parts <= 9; parts++) for (let filled = 1; filled < parts; filled++) {
+    candidates.push({ kind: "fraction", parts, filled });
+  }
+  const available = candidates.filter((visual) => !used.has(mathsVisualKey(visual)));
+  if (!available.length) throw new Error("No fresh maths visual available.");
+  const visual = available[randomInt(available.length)]!;
+  if (visual.kind === "array") {
+    const icons = ["star", "apple", "leaf", "note", "drop"] as const;
+    return { ...visual, icon: icons[randomInt(icons.length)]! };
+  }
+  return visual;
+}
+
 export class QuizRepository {
   constructor(private readonly blobs: JsonBlobStore) {}
 
@@ -116,13 +171,21 @@ export class QuizRepository {
     return `parents/${parentOid.toLowerCase()}/quiz/memory/${subjectKey(`${input.subject}:${input.language}`)}.json`;
   }
 
-  async recentQuestions(parentOid: string, input: QuizInput): Promise<string[]> {
+  async recent(parentOid: string, input: QuizInput): Promise<{ questions: string[]; visuals: QuizVisual[] }> {
     const stored = await this.blobs.read<unknown>(this.memoryKey(parentOid, input));
-    return stored ? validateMemory(stored.value).recent.slice(-8).map((item) => item.question) : [];
+    const recent = stored ? validateMemory(stored.value).recent : [];
+    return {
+      questions: recent.slice(-8).map((item) => item.question),
+      visuals: recent.flatMap((item) => item.visual ? [item.visual] : [])
+    };
+  }
+
+  async recentQuestions(parentOid: string, input: QuizInput): Promise<string[]> {
+    return (await this.recent(parentOid, input)).questions;
   }
 
   async create(parentOid: string, input: QuizInput, generated: GeneratedQuiz): Promise<{
-    id: string; question: string; options: GeneratedQuiz["options"];
+    id: string; question: string; options: GeneratedQuiz["options"]; visual?: QuizVisual;
   }> {
     input = validateQuizInput(input);
     generated = validateGeneratedQuiz(generated);
@@ -133,8 +196,11 @@ export class QuizRepository {
       const current = await this.blobs.read<unknown>(memoryKey);
       const memory = current ? validateMemory(current.value) : { recent: [] };
       if (memory.recent.some((item) => item.fingerprint === fingerprint)) throw new QuizDuplicateError();
+      const visualKey = input.subject === "Maths" ? mathsVisualKey(generated.visual) : undefined;
+      if (visualKey && memory.recent.some((item) => mathsVisualKey(item.visual) === visualKey)) throw new QuizDuplicateError();
       const next: QuizMemory = {
-        recent: [...memory.recent, { question: generated.question, fingerprint }].slice(-MAX_RECENT)
+        recent: [...memory.recent, { question: generated.question, fingerprint,
+          ...(visualKey && generated.visual ? { visual: generated.visual } : {}) }].slice(-MAX_RECENT)
       };
       confirmed = current
         ? await this.blobs.replace(memoryKey, next, current.etag)
@@ -148,7 +214,7 @@ export class QuizRepository {
     if (!await this.blobs.create(`${this.prefix(parentOid)}${id}.json`, record)) {
       throw new Error("Quiz write could not be confirmed.");
     }
-    return { id, question: record.question, options: [...record.options] };
+    return { id, question: record.question, options: [...record.options], ...(record.visual ? { visual: record.visual } : {}) };
   }
 
   async answer(parentOid: string, id: string, answerIndex: number): Promise<{
@@ -200,6 +266,7 @@ function validateMemory(value: unknown): QuizMemory {
   if (!Array.isArray(memory.recent) || memory.recent.length > MAX_RECENT ||
       memory.recent.some((item) => !item || !plainString(item.question, 320) ||
         item.fingerprint !== quizFingerprint(item.question))) throw new Error("Invalid quiz memory.");
+  for (const item of memory.recent) if (item.visual !== undefined) validateVisual(item.visual);
   return memory;
 }
 
@@ -209,7 +276,8 @@ function validateRecord(value: unknown): QuizRecord {
   try {
     validateQuizInput({ subject: quiz.subject, language: quiz.language });
     validateGeneratedQuiz({
-      question: quiz.question, options: quiz.options, correctIndex: quiz.correctIndex, explanation: quiz.explanation
+      question: quiz.question, options: quiz.options, correctIndex: quiz.correctIndex, explanation: quiz.explanation,
+      ...(quiz.visual === undefined ? {} : { visual: quiz.visual })
     });
     validateQuizId(quiz.id);
     if (quiz.fingerprint !== quizFingerprint(quiz.question) ||
