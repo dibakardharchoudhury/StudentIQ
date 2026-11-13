@@ -24,7 +24,7 @@ describe('backend roles, planning and preferences', () => {
     await client.deleteReminder('item/1');
     expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).toEqual(update);
     expect(fetchMock.mock.calls[1]).toEqual([
-      'https://test.example/api/admin/reminders/item%2F1', expect.objectContaining({ method: 'DELETE', cache: 'no-store', credentials: 'omit' }),
+      'https://test.example/api/planning/reminders/item%2F1', expect.objectContaining({ method: 'DELETE', cache: 'no-store', credentials: 'omit' }),
     ]);
   });
   it('rejects invalid calendar dates and duplicate planning IDs instead of showing invented items', async () => {

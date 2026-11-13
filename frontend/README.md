@@ -54,9 +54,9 @@ Every call uses `Authorization: Bearer <API access token>`, `credentials: omit`,
 | `POST /api/chat` | Request `{ "sessionId": "optional-existing-id", "subject": "maths", "language": "en", "message": "...", "mood": "gentle" }`; response `{ "sessionId": "...", "reply": "..." }`. `mood` is omitted until saved preferences are available. |
 | `POST /api/speech/token` | Request `{}`; response `{ "token": "aad#<resourceId>#<entra-access-token>", "region": "norwayeast" }` |
 | `GET /api/me` | `{ "role": "admin" }` or `{ "role": "student" }`; unknown/missing roles fail closed |
-| `GET /api/admin/reminders` | `{ "reminders": [{ "id": "...", "title": "...", "date": "2026-11-14", "completed": false }] }` |
-| `POST /api/admin/reminders` | Create `{ "title": "...", "date": "2026-11-14" }`; update `{ "id": "...", "title": "...", "date": "2026-11-14", "completed": true }` |
-| `DELETE /api/admin/reminders/{encoded id}` | No request body. POST/DELETE responses may be empty 2xx; canonical items are refetched after every mutation. |
+| `GET /api/planning/reminders` | `{ "reminders": [{ "id": "...", "title": "...", "date": "2026-11-14", "completed": false }] }` |
+| `POST /api/planning/reminders` | Create `{ "title": "...", "date": "2026-11-14" }`; update `{ "id": "...", "title": "...", "date": "2026-11-14", "completed": true }` |
+| `DELETE /api/planning/reminders/{encoded id}` | No request body. POST/DELETE responses may be empty 2xx; canonical items are refetched after every mutation. |
 | `GET /api/preferences` | `{ "appearance": "rose", "voice": "default", "mood": "gentle" }` |
 | `PUT /api/preferences` | Same JSON shape and enums; after a successful PUT the frontend GETs canonical persisted preferences before applying them |
 | `POST /api/practice/piano` | `{ "targetNote": "C4", "selectedNote": "D4" }` → `{ "correct": false }` |

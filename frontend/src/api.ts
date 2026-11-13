@@ -170,7 +170,7 @@ export class Api {
   speechToken(signal?: AbortSignal) { return this.request('/api/speech/token', speechSchema, signal, {}); }
   me(signal?: AbortSignal) { return this.request('/api/me', meSchema, signal); }
   async reminders(signal?: AbortSignal): Promise<Reminder[]> {
-    const result = await this.request('/api/admin/reminders', z.object({ reminders: z.array(reminderSchema) }), signal);
+    const result = await this.request('/api/planning/reminders', z.object({ reminders: z.array(reminderSchema) }), signal);
     if (new Set(result.reminders.map(item => item.id)).size !== result.reminders.length) {
       throw new ApiError('API contract error: planning items contain duplicate IDs.');
     }
@@ -183,11 +183,11 @@ export class Api {
     const result = schema.safeParse(input);
     if (!result.success) throw new ApiError('Enter a title (1–200 characters) and a valid calendar date.');
     // Mutation response bodies are unspecified. The UI always refetches canonical items.
-    await this.response('/api/admin/reminders', 'POST', signal, result.data);
+    await this.response('/api/planning/reminders', 'POST', signal, result.data);
   }
   async deleteReminder(reminderId: string, signal?: AbortSignal): Promise<void> {
     if (!reminderId) throw new ApiError('A planning item ID is required.');
-    await this.response(`/api/admin/reminders/${encodeURIComponent(reminderId)}`, 'DELETE', signal);
+    await this.response(`/api/planning/reminders/${encodeURIComponent(reminderId)}`, 'DELETE', signal);
   }
   pianoPractice(input: PianoInput, signal?: AbortSignal) {
     const result = pianoInputSchema.safeParse(input);

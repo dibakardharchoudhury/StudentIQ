@@ -38,7 +38,7 @@ tenant, set its object ID as `ENTRA_STUDENT_OID` on the Function App. It must
 differ from `ENTRA_PARENT_OID`. Supply the same ID as `studentObjectId` when
 redeploying `infra\function.bicep`, so infrastructure updates preserve access.
 The identity must be able to sign in and obtain the app's delegated scope.
-Verify that student sign-in works and that its API requests to `/api/admin`
+Verify that student sign-in works and that its API requests to `/api/planning`
 are rejected before handing over the device.
 
 Voice capture requires a user gesture and permission. Audio is sent to Azure

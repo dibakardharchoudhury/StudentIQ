@@ -86,7 +86,7 @@ can read/write calendar reminders; students receive 403 on all admin routes.
 * `GET /api/health` — unauthenticated liveness response.
 * `GET /api/me` — `{ "role": "admin" | "student" }`.
 * `GET /api/preferences` and `PUT /api/preferences` — the preferences object described below.
-* `GET /api/admin/reminders`, `POST /api/admin/reminders`, `DELETE /api/admin/reminders/{id}` — admin-only manual planning.
+* `GET /api/planning/reminders`, `POST /api/planning/reminders`, `DELETE /api/planning/reminders/{id}` — admin-only manual planning. The `admin` route prefix is reserved by Azure Functions.
 * `POST /api/practice/piano` and `GET /api/practice/piano` — recorded note-identification practice.
 * `POST /api/quiz`, `POST /api/quiz/{id}/answer`, `GET /api/quiz/attempts` — evidence-based MCQ practice.
 * `GET /api/sessions` — `{ "sessions": [{ "id", "subject", "language", "updatedAt", "summary" }] }`
@@ -142,7 +142,7 @@ regenerating the answer. No monitoring/eye-contact scores are accepted.
   responds **201** `{ "reminder": { "id", "title", "date", "completed" } }`.
 * POST `{ "id", "title", "date", "completed" }` fully updates an existing item;
   responds **200** with the same wrapper. Missing items return 404.
-* DELETE `/api/admin/reminders/{id}` confirms deletion with **204**; an already
+* DELETE `/api/planning/reminders/{id}` confirms deletion with **204**; an already
   absent valid ID is also 204. Invalid IDs return 400.
 
 Titles are nonempty single-line plain text, at most 120 characters. Dates

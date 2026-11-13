@@ -45,7 +45,7 @@ handlers.fetch({
 assert.equal(await (await navigation).text(), `static:${base}index.html`);
 for (const path of [
   `${base}config.json`, `${base}auth.html`, `${base}api/sessions`, '/api/sessions', `${base}?code=private`,
-  '/api/me', '/api/admin/reminders', '/api/preferences', '/api/practice/piano', '/api/quiz/attempts',
+  '/api/me', '/api/planning/reminders', '/api/preferences', '/api/practice/piano', '/api/quiz/attempts',
   '/api/sessions?cursor=private', '/api/practice/piano?cursor=private', '/api/quiz/attempts?cursor=private',
 ]) {
   assert.equal(intercept(path), undefined, `Must bypass worker: ${path}`);

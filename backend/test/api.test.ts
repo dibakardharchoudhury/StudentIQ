@@ -420,7 +420,7 @@ test("every admin operation rejects students before reading bodies or touching r
   for (const [operation, method] of [
     [ops.listReminders, "GET"], [ops.saveReminder, "POST"], [ops.deleteReminder, "DELETE"]
   ] as const) {
-    const response = await dispatch(request("admin/reminders", {
+    const response = await dispatch(request("planning/reminders", {
       method, headers: { "X-Role": "admin", "X-MS-CLIENT-PRINCIPAL": "admin" }
     }), operation, deps);
     assert.equal(response.status, 403);
@@ -431,28 +431,28 @@ test("every admin operation rejects students before reading bodies or touching r
 test("admin calendar CRUD persists manual planning items and validates dates", async () => {
   const deps = dependencies(async () => config.parentOid);
   const ops = createOperations();
-  const created = await dispatch(request("admin/reminders", {
+  const created = await dispatch(request("planning/reminders", {
     method: "POST",
     body: JSON.stringify({ title: "Draw a map", date: "2026-11-20" })
   }), ops.saveReminder, deps);
   assert.equal(created.status, 201);
   const reminder = (created.jsonBody as { reminder: { id: string; title: string; date: string; completed: boolean } }).reminder;
   assert.equal(reminder.completed, false);
-  assert.deepEqual((await dispatch(request("admin/reminders"), ops.listReminders, deps)).jsonBody, { reminders: [reminder] });
-  const updated = await dispatch(request("admin/reminders", {
+  assert.deepEqual((await dispatch(request("planning/reminders"), ops.listReminders, deps)).jsonBody, { reminders: [reminder] });
+  const updated = await dispatch(request("planning/reminders", {
     method: "POST",
     body: JSON.stringify({ ...reminder, completed: true })
   }), ops.saveReminder, deps);
   assert.equal(updated.status, 200);
   assert.equal((updated.jsonBody as { reminder: { completed: boolean } }).reminder.completed, true);
-  const invalid = await dispatch(request("admin/reminders", {
+  const invalid = await dispatch(request("planning/reminders", {
     method: "POST", body: JSON.stringify({ title: "Impossible date", date: "2026-02-30" })
   }), ops.saveReminder, deps);
   assert.equal(invalid.status, 400);
-  const deleteRequest = request(`admin/reminders/${reminder.id}`, { method: "DELETE" });
+  const deleteRequest = request(`planning/reminders/${reminder.id}`, { method: "DELETE" });
   deleteRequest.params.id = reminder.id;
   assert.equal((await dispatch(deleteRequest, ops.deleteReminder, deps)).status, 204);
-  assert.deepEqual((await dispatch(request("admin/reminders"), ops.listReminders, deps)).jsonBody, { reminders: [] });
+  assert.deepEqual((await dispatch(request("planning/reminders"), ops.listReminders, deps)).jsonBody, { reminders: [] });
 });
 
 test("student and admin share tutoring, history, piano evidence, and one family quota", async () => {
@@ -496,7 +496,7 @@ test("new routes require authentication and support exact-origin CORS including 
   ]) {
     assert.equal((await dispatch(request("me"), operation, deps)).status, 401);
   }
-  const preflight = await dispatch(request("admin/reminders/id", {
+  const preflight = await dispatch(request("planning/reminders/id", {
     method: "OPTIONS", headers: { Origin: config.githubPagesOrigin, "Access-Control-Request-Method": "DELETE" }
   }), null, deps, { preflight: true });
   assert.equal(preflight.status, 204);
@@ -512,7 +512,7 @@ test("calendar and piano writes fail with 503 rather than returning success-shap
   const diagnostics: DiagnosticEvent[] = [];
   deps.logError = (event) => diagnostics.push(event);
   blobs.failWritesContaining = "/admin/";
-  const calendar = await dispatch(request("admin/reminders", {
+  const calendar = await dispatch(request("planning/reminders", {
     method: "POST", body: JSON.stringify({ title: "Manual note", date: "2026-11-20" })
   }), createOperations().saveReminder, deps, { operationName: "admin-reminders-save" });
   assert.equal(calendar.status, 503);
