@@ -1,0 +1,27 @@
+{
+  "name": "studentiq-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Parent-authorized StudentIQ Azure Functions API",
+  "main": "dist/src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.7.2",
+    "@azure/identity": "^4.10.2",
+    "@azure/storage-blob": "^12.28.0",
+    "jose": "^6.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}

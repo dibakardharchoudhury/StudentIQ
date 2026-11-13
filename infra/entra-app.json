@@ -1,0 +1,25 @@
+{
+  "identifierUris": [
+    "api://559986d7-88a2-4084-a02a-f8897bbdd32c"
+  ],
+  "spa": {
+    "redirectUris": [
+      "https://dibakardharchoudhury.github.io/StudentIQ/auth.html"
+    ]
+  },
+  "api": {
+    "requestedAccessTokenVersion": 2,
+    "oauth2PermissionScopes": [
+      {
+        "id": "1934db89-844a-4a5a-a94c-d1e3018f4192",
+        "adminConsentDisplayName": "Access the StudentIQ tutor",
+        "adminConsentDescription": "Allow the signed-in parent to use the StudentIQ tutor.",
+        "userConsentDisplayName": "Access the StudentIQ tutor",
+        "userConsentDescription": "Allow access to your StudentIQ tutor.",
+        "isEnabled": true,
+        "type": "User",
+        "value": "access_as_user"
+      }
+    ]
+  }
+}

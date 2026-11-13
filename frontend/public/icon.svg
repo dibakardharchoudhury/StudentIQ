@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <style>:root{--cp-accent:#b11f4b;--cp-accent-fg:#ffffff}</style>
+  <rect width="128" height="128" rx="24" fill="var(--cp-accent)"/>
+  <path d="M28 34h31v55H28zm41 0h31v55H69z" fill="var(--cp-accent-fg)"/>
+</svg>
