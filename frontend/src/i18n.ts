@@ -1,13 +1,17 @@
 import type { Language } from './api';
 
 const en = {
-  tagline: 'Little questions. Big discoveries.', parent: 'A parent-guided learning space',
-  welcome: 'A little curiosity goes a long way.',
-  welcomeBody: 'Explore a tricky question, practise something new, and learn one small step at a time.',
+  tagline: 'Big questions. Bright ideas.', parent: 'A parent-guided learning space',
+  welcome: 'Curious minds make great adventures.',
+  welcomeBody: 'Meet your learning companion, explore big ideas and find out what happens when you ask “what if?”',
+  welcomeSteps: 'Your adventure', welcomePick: 'Pick a subject', welcomeWonder: 'Wonder out loud', welcomeExplore: 'Explore together',
+  teacherHello: 'Hello, curious mind! What shall we discover today?',
   signIn: 'Administrator sign-in', signingIn: 'Checking account access…', signOut: 'Sign out & clear this screen',
   parentNote: 'The administrator controls which personal accounts can sign in as parents or students.',
   microsoftStudent: 'Sign in with Microsoft personal account',
   googleUnavailable: 'Google sign-in is not configured yet.',
+  googleLoadError: 'Google sign-in could not load. Check your connection and try again.',
+  googleRetry: 'Retry Google sign-in',
   identitySetup: 'For administrator setup only: this is an unverified identifier. Confirm the account, then add it under Configuration; do not share or commit it',
   privateNote: 'No camera. No personal data saved in this browser. Microphone only while you hold the talk button.',
   setup: 'Before we can learn together', retry: 'Try again', language: 'Learning language',
@@ -23,8 +27,8 @@ const en = {
   voiceNote: 'Hold with a pointer, Space or Enter. Release to stop (30-second maximum). Review the transcript before sending.',
   mute: 'Mute voice', unmute: 'Enable voice', muted: 'Voice muted', voice: 'Voice enabled',
   replay: 'Read reply aloud', you: 'You', teacher: 'Teacher',
-  emptyChat: 'Your next discovery starts with a question.',
-  emptyChatBody: 'Choose a subject and ask in your own words. Your conversation comes from the tutoring service.',
+  emptyChat: 'What’s bubbling in your brain?',
+  emptyChatBody: 'Ask a question, share an idea or invite your teacher on a silly learning adventure.',
   historyTitle: 'Your learning sessions', historyBody: 'Continue a conversation saved by the tutoring service.',
   noSessions: 'No saved sessions were returned by the service.', refresh: 'Refresh sessions',
   loading: 'Loading from the tutoring service…', continue: 'Continue', summary: 'No summary provided',
@@ -53,7 +57,8 @@ const en = {
   draftFull: 'Your draft is too long to add this question. Shorten it and try again.',
   messageTooLong: 'Questions can contain at most 1,200 characters. Shorten your draft before sending.',
   discardDraft: 'This will clear your unsent question. Continue?',
-  starterTitle: 'Not sure what to ask?', starterHint: 'Give me a hint', starterPicture: 'Show me an example', starterChallenge: 'Ask me a question',
+  starterTitle: 'A little inspiration', starterHint: 'Give me a hint', starterPicture: 'Show me an example', starterChallenge: 'Ask me a question',
+  starterStory: 'Make it a silly story',
   starterReview: 'Choose an idea to add it to your draft. You decide when to send it.',
   activities: 'Explore by doing', activitiesNote: 'The visual explorers and sentence builder stay on this device. Quiz and piano practice can be saved. Ask the teacher only when you choose.',
   arrayTitle: 'Make a multiplication picture', arrayRows: 'Rows', arrayColumns: 'Dots in each row',
@@ -119,6 +124,7 @@ const en = {
   checkInMessage: 'This page has been quiet for a while, or you have just come back. Would you like a hint or a break? It is okay to keep going.',
   quizTitle: 'Optional question practice', quizWarning: 'AI-generated questions and answers may contain errors. Check anything surprising with a grown-up. Scores describe practice, not ability or intelligence.',
   missionTitle: 'A little mission for you', missionIntro: 'Ready for a curious challenge? Meet a silly situation, look closely and choose what you think.',
+  missionKicker: 'Imagine · explore · discover',
   missionStart: 'Make me a mission', missionNext: 'Make another mission', missionVisual: 'Clues to explore',
   missionNoVisual: 'This question has no picture. You can still answer it or try another.',
   missionAsk: 'Ask the teacher for a hint', missionAskDraft: 'Can you give me a hint for this question without giving away the answer?',
@@ -137,13 +143,17 @@ const en = {
 };
 type Copy = { [K in keyof typeof en]: string };
 const nb: Copy = {
-  tagline: 'Små spørsmål. Store oppdagelser.', parent: 'Et læringsrom med foreldre i førersetet',
-  welcome: 'Litt nysgjerrighet tar deg langt.',
-  welcomeBody: 'Utforsk et vanskelig spørsmål, øv på noe nytt og lær ett lite steg om gangen.',
+  tagline: 'Store spørsmål. Lyse ideer.', parent: 'Et læringsrom med foreldre i førersetet',
+  welcome: 'Nysgjerrige hoder skaper eventyr.',
+  welcomeBody: 'Møt læringsvennen din, utforsk store ideer og finn ut hva som skjer når du spør «hva om?»',
+  welcomeSteps: 'Ditt eventyr', welcomePick: 'Velg et fag', welcomeWonder: 'Undre deg høyt', welcomeExplore: 'Utforsk sammen',
+  teacherHello: 'Hei, nysgjerrige du! Hva skal vi oppdage i dag?',
   signIn: 'Administratorinnlogging', signingIn: 'Sjekker kontotilgang…', signOut: 'Logg ut og tøm skjermen',
   parentNote: 'Administrator styrer hvilke personlige kontoer som kan logge inn som foreldre eller elever.',
   microsoftStudent: 'Logg inn med personlig Microsoft-konto',
   googleUnavailable: 'Google-innlogging er ikke konfigurert ennå.',
+  googleLoadError: 'Google-innlogging kunne ikke lastes. Sjekk tilkoblingen og prøv igjen.',
+  googleRetry: 'Prøv Google-innlogging på nytt',
   identitySetup: 'Kun for administratoroppsett: Dette er en ubekreftet identifikator. Bekreft kontoen og legg den til under Konfigurasjon; ikke del eller lagre den i kode',
   privateNote: 'Ingen kamera. Ingen persondata lagres i nettleseren. Mikrofonen brukes bare mens du holder inne snakkeknappen.',
   setup: 'Før vi kan lære sammen', retry: 'Prøv igjen', language: 'Læringsspråk',
@@ -159,8 +169,8 @@ const nb: Copy = {
   voiceNote: 'Hold med peker, mellomrom eller Enter. Slipp for å stoppe (maks. 30 sekunder). Sjekk teksten før du sender.',
   mute: 'Demp tale', unmute: 'Slå på tale', muted: 'Tale dempet', voice: 'Tale på',
   replay: 'Les svaret høyt', you: 'Du', teacher: 'Lærer',
-  emptyChat: 'Din neste oppdagelse starter med et spørsmål.',
-  emptyChatBody: 'Velg et fag og spør med dine egne ord. Samtalen kommer fra læringstjenesten.',
+  emptyChat: 'Hva bobler i hodet ditt?',
+  emptyChatBody: 'Still et spørsmål, del en idé eller inviter læreren med på et tullete læringseventyr.',
   historyTitle: 'Dine læringsøkter', historyBody: 'Fortsett en samtale lagret av læringstjenesten.',
   noSessions: 'Tjenesten returnerte ingen lagrede økter.', refresh: 'Oppdater økter',
   loading: 'Henter fra læringstjenesten…', continue: 'Fortsett', summary: 'Ingen oppsummering oppgitt',
@@ -189,7 +199,8 @@ const nb: Copy = {
   draftFull: 'Utkastet er for langt til å legge til dette spørsmålet. Forkort det og prøv igjen.',
   messageTooLong: 'Spørsmål kan ha maks 1 200 tegn. Forkort utkastet før du sender.',
   discardDraft: 'Dette vil fjerne spørsmålet du ikke har sendt. Vil du fortsette?',
-  starterTitle: 'Usikker på hva du skal spørre om?', starterHint: 'Gi meg et hint', starterPicture: 'Vis meg et eksempel', starterChallenge: 'Still meg et spørsmål',
+  starterTitle: 'Litt inspirasjon', starterHint: 'Gi meg et hint', starterPicture: 'Vis meg et eksempel', starterChallenge: 'Still meg et spørsmål',
+  starterStory: 'Lag en tullete historie',
   starterReview: 'Velg en idé for å legge den i utkastet. Du bestemmer når du vil sende.',
   activities: 'Utforsk ved å prøve selv', activitiesNote: 'De visuelle verktøyene og setningsbyggeren blir på enheten. Spørsmålsøving og pianoøving kan lagres. Spør læreren bare når du selv vil.',
   arrayTitle: 'Lag et gangestykke som bilde', arrayRows: 'Rader', arrayColumns: 'Prikker i hver rad',
@@ -255,6 +266,7 @@ const nb: Copy = {
   checkInMessage: 'Det har vært stille på siden en stund, eller du har nettopp kommet tilbake. Vil du ha et hint eller en pause? Du kan gjerne fortsette.',
   quizTitle: 'Valgfri spørsmålsøving', quizWarning: 'KI-genererte spørsmål og svar kan inneholde feil. Sjekk overraskende ting med en voksen. Poeng beskriver øving, ikke evne eller intelligens.',
   missionTitle: 'Et lite oppdrag til deg', missionIntro: 'Klar for en nysgjerrig utfordring? Møt en tullete situasjon, se nøye og velg det du tror.',
+  missionKicker: 'Se for deg · utforsk · oppdag',
   missionStart: 'Lag et oppdrag', missionNext: 'Lag et nytt oppdrag', missionVisual: 'Ledetråder å utforske',
   missionNoVisual: 'Dette spørsmålet har ikke noe bilde. Du kan likevel svare eller prøve et nytt.',
   missionAsk: 'Be læreren om et hint', missionAskDraft: 'Kan du gi meg et hint til dette spørsmålet uten å røpe svaret?',
@@ -274,7 +286,7 @@ const nb: Copy = {
 export const copy = (language: Language): Copy => language === 'nb' ? nb : en;
 export const subjects = ['maths', 'norwegian', 'science', 'currentAffairs', 'english', 'geography', 'history', 'piano', 'otherLanguages'] as const;
 export const subjectIcons: Record<typeof subjects[number], string> = {
-  maths: '⅟', norwegian: 'Å', science: '⚗', currentAffairs: '◉', english: 'Aa', geography: '◎', history: '⌛', piano: '♫', otherLanguages: '文',
+  maths: '🧮', norwegian: '💬', science: '🔬', currentAffairs: '📰', english: '📖', geography: '🌍', history: '⌛', piano: '🎹', otherLanguages: '🌱',
 };
 export function subjectLabel(subject: string, language: Language) {
   if (subject === 'history') return copy(language).historySubject;

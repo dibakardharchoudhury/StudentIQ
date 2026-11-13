@@ -10,13 +10,19 @@ it('allows an administrator to approve a parent and explicitly confirm removal',
     removeSocialAccount: vi.fn().mockResolvedValue(undefined),
   };
   render(<AccessManagement api={api} language="en" online onAccessDenied={vi.fn()} />);
-  await screen.findByText('No social accounts are approved.');
+  await screen.findByText('No accounts have been approved yet.');
+  expect(screen.getByText(/The ID is not an email address/)).toBeVisible();
   fireEvent.change(screen.getByLabelText('Sign-in provider'), { target: { value: 'google' } });
   fireEvent.change(screen.getByLabelText('Account ID'), { target: { value: 'account-123' } });
   fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'parent' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Approve or change role' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Approve account' }));
   await waitFor(() => expect(api.saveSocialAccount).toHaveBeenCalledWith(
     { provider: 'google', subject: 'account-123', role: 'parent' }, expect.any(AbortSignal),
+  ));
+  expect(await screen.findByText('Google · Parent')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Change to student' }));
+  await waitFor(() => expect(api.saveSocialAccount).toHaveBeenCalledWith(
+    { provider: 'google', subject: 'account-123', role: 'student' }, expect.any(AbortSignal),
   ));
   fireEvent.click(await screen.findByRole('button', { name: 'Remove access' }));
   expect(api.removeSocialAccount).not.toHaveBeenCalled();

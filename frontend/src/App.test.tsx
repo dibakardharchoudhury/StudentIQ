@@ -92,6 +92,14 @@ describe('learning state', () => {
     expect(input).toHaveValue('x'.repeat(1190));
     expect(chat).not.toHaveBeenCalled();
   });
+  it('adds a silly story about the selected subject without sending it', async () => {
+    const chat = vi.fn();
+    await setup(chat);
+    fireEvent.click(screen.getByRole('button', { name: 'Science' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Make it a silly story' }));
+    expect(screen.getByRole('textbox')).toHaveValue('Can you make a short, silly story about Science and ask me one question about it?');
+    expect(chat).not.toHaveBeenCalled();
+  });
   it('preserves a full draft instead of silently truncating it to add a visual question', async () => {
     const chat = vi.fn();
     await setup(chat);

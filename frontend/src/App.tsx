@@ -143,6 +143,10 @@ export default function App() {
           <p className="eyebrow">✦ {c.parent}</p>
           <h1>{c.welcome}</h1>
           <p className="lead">{c.welcomeBody}</p>
+          <div className="welcome-steps" aria-label={c.welcomeSteps}>
+            {[c.welcomePick, c.welcomeWonder, c.welcomeExplore].map((step, index) =>
+              <span key={step}><strong aria-hidden="true">{['✎', '✦', '◎'][index]}</strong>{step}</span>)}
+          </div>
           <div className="subject-preview">{subjects.map(subject =>
             <span key={subject}>{subjectLabel(subject, language)}</span>)}</div>
           {setupError ? <section className="setup-error" role="alert">
@@ -153,7 +157,7 @@ export default function App() {
           </button>}
           {runtime?.config.microsoftPersonalClientId && <p><button disabled={authBusy || !online}
             onClick={() => void signIn(auth => auth.signInMicrosoft(), true)}>{c.microsoftStudent}</button></p>}
-          {runtime?.config.googleClientId && <GoogleSignIn clientId={runtime.config.googleClientId}
+          {runtime?.config.googleClientId && <GoogleSignIn clientId={runtime.config.googleClientId} language={language}
             disabled={authBusy || !online}
             onCredential={(token, nonce) => void signIn(auth => auth.exchange('google', token, nonce), true)} />}
           {runtime && !runtime.config.googleClientId && <p className="small">{c.googleUnavailable}</p>}
@@ -163,7 +167,9 @@ export default function App() {
           <div className="privacy-strip"><span aria-hidden="true">◇</span><p>{c.privateNote}</p></div>
         </section>
         <section className="welcome-teacher">
+          <div className="teacher-bubble">{c.teacherHello}</div>
           <Teacher speaking={false} label={c.teacherIdle} />
+          <div className="welcome-sparkles" aria-hidden="true"><span>✦</span><span>✳</span><span>✧</span><span>♫</span></div>
           <p className="small">{c.teacherNote}</p>
         </section>
       </main>}
@@ -400,10 +406,12 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
     { label: c.starterHint, question: `Kan du gi meg et hint om ${currentSubject} og stille meg ett spørsmål?` },
     { label: c.starterPicture, question: `Kan du vise meg et enkelt visuelt eksempel på ${currentSubject} med tekst eller symboler?` },
     { label: c.starterChallenge, question: `Kan du stille meg ett spørsmål om ${currentSubject} uten å si svaret først?` },
+    { label: c.starterStory, question: `Kan du lage en kort, tullete historie om ${currentSubject} og stille meg ett spørsmål om den?` },
   ] : [
     { label: c.starterHint, question: `Can you give me a hint about ${currentSubject} and ask me one question?` },
     { label: c.starterPicture, question: `Can you show me a simple visual example of ${currentSubject} using text or symbols?` },
     { label: c.starterChallenge, question: `Can you ask me one question about ${currentSubject} without giving the answer first?` },
+    { label: c.starterStory, question: `Can you make a short, silly story about ${currentSubject} and ask me one question about it?` },
   ];
   const counts = new Map<string, number>();
   sessions.forEach(session => counts.set(session.subject, (counts.get(session.subject) || 0) + 1));

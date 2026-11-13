@@ -98,8 +98,13 @@ export default function Quiz({ api, subject, language, disabled, online, onBusyC
       ? `${question.visual.filled} ${c.missionFilled}, ${question.visual.parts} ${c.missionParts}`
       : question?.visual?.kind === 'cards' ? question.visual.items.join(' · ') : '';
   return <section className="quiz-panel" aria-label={c.missionTitle}>
-    <div className="mission-heading"><span className="mission-icon" aria-hidden="true">✦</span>
-      <div><h2>{c.missionTitle}</h2><p>{c.missionIntro}</p></div></div>
+    <div className="mission-heading"><span className="mission-icon" aria-hidden="true">
+      <svg viewBox="0 0 64 64" focusable="false">
+        <path d="M32 5 38 22 56 19 47 34 57 48 39 47 32 59 25 47 7 48 17 34 8 19 26 22Z" />
+        <circle cx="25" cy="33" r="2" /><circle cx="39" cy="33" r="2" />
+        <path className="mission-smile" d="M27 40 Q32 45 37 40" />
+      </svg></span>
+      <div><p className="mission-kicker">{c.missionKicker}</p><h2>{c.missionTitle}</h2><p>{c.missionIntro}</p></div></div>
     <p className="small">{c.quizWarning}</p>
     {subject === 'currentAffairs' ? <p>{c.missionNews}</p> : <>
     {subject === 'otherLanguages' && <label className="mission-language">{c.missionLanguage}

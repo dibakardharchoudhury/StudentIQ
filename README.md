@@ -88,8 +88,11 @@ does not reactivate old sessions.
    identifier. Confirm the selected account with the provider; never approve
    an identifier supplied by an unknown person. Sign in as administrator in a
    separate browser or device, open Configuration, and add the provider,
-   case-sensitive identifier and role. Do not put identifiers in Git, URLs, or
-   logs. Each provider account must be approved independently.
+   case-sensitive identifier and role under **Approved accounts → Add an
+   account**. The account ID is not an email address. The access list shows
+   each approved provider and role and lets the administrator change or remove
+   access. Do not put identifiers in Git, URLs, or logs. Each provider account
+   must be approved independently.
 4. Sign in again, confirm the approved account sees the shared history and
    cannot access Configuration or the planning API, and confirm administrator
    sign-in still works. Remove an entry in Configuration to revoke access.

@@ -58,6 +58,10 @@ export default function Teacher({ speaking, label, appearance = 'rose', mood = '
       part(rose, [.13, .13, .13], [0, .91, 0], head);
       const left = part(ink, [.075, .11, .045], [-.28, .05, .57], head);
       const right = part(ink, [.075, .11, .045], [.28, .05, .57], head);
+      const leftGlint = part(face, [.022, .025, .02], [-.30, .09, .615], head);
+      const rightGlint = part(face, [.022, .025, .02], [.26, .09, .615], head);
+      part(rose, [.105, .045, .025], [-.49, -.15, .49], head);
+      part(rose, [.105, .045, .025], [.49, -.15, .49], head);
       const mouth = part(ink, [.17, .035, .035], [0, -.27, .57], head);
       const smileGeometry = new THREE.TorusGeometry(.14, .022, 8, 24, Math.PI);
       const smile = new THREE.Mesh(smileGeometry, ink);
@@ -93,6 +97,7 @@ export default function Teacher({ speaking, label, appearance = 'rose', mood = '
         const seconds = time / 1000;
         const blink = !reduced.matches && seconds % 4.7 > 4.52 ? .12 : 1;
         left.scale.y = right.scale.y = .11 * blink;
+        leftGlint.scale.y = rightGlint.scale.y = .025 * blink;
         mouth.scale.y = talking.current && !reduced.matches ? .07 + Math.abs(Math.sin(seconds * 12)) * .09 : .035;
         smile.visible = mood !== 'calm' && !talking.current;
         mouth.visible = !smile.visible;
