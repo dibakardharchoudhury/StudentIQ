@@ -85,5 +85,8 @@ Private endpoints incur charges even when the app is idle, in addition to
 Functions, Speech, AI inference, storage and other resources. Per-user app
 limits and Azure budget alerts are not hard spending caps. Set and monitor a
 resource-group budget appropriate to the subscription's billing currency and
-verify that alerts reach an owner. Check the Azure pricing calculator for
-current regional rates.
+verify that alerts reach an owner. The deployed resource-group budget is USD
+50 per month, with alerts at 80% actual and 100% forecast; it expires on
+November 1, 2027. Adjust it as needed and renew it before expiry. The template
+in `infra\budget.bicep` requires a notification email when redeployed. Check
+the Azure pricing calculator for current regional rates.
