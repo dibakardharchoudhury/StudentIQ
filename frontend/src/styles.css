@@ -235,7 +235,7 @@ footer > .small { flex-basis: 100%; font-size: .6875rem; }
   .teacher-panel .voice-toggle { max-width: 240px; }
   .teacher-settings { grid-column: 1 / -1; }
   .workspace-nav { gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-  .workspace-nav button { min-width: 0; flex: 1; padding: 8px 12px; }
+  .workspace-nav button { min-width: 0; flex: 1 1 auto; padding: 8px 12px; }
   .lesson-heading, .composer { padding: 20px 16px; }
   .subject-picker { padding: 0 16px 16px; }
   .fraction-explorer { margin: 16px 16px 0; padding: 16px; }
