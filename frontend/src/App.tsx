@@ -2,18 +2,21 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Api, type Language, type Preferences, type Role, type Session, type SessionDetail } from './api';
 import { ParentAuth } from './auth';
 import { loadConfig } from './config';
+import type { AppConfig } from './config';
+import GoogleSignIn from './GoogleSignIn';
 import { copy, subjects, subjectIcons, subjectLabel } from './i18n';
 import { Speech } from './speech';
 import Teacher from './Teacher';
 import FractionExplorer from './FractionExplorer';
 import PlanningCalendar from './PlanningCalendar';
+import AccessManagement from './AccessManagement';
 import Piano from './Piano';
 import TeacherSettings from './TeacherSettings';
 import GentleCheckIn from './GentleCheckIn';
 import Quiz from './Quiz';
 import PracticeProgress from './PracticeProgress';
 
-type Runtime = { auth: ParentAuth; api: Api };
+type Runtime = { auth: ParentAuth; api: Api; config: AppConfig };
 type InstallEvent = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> };
 type View = 'learn' | 'history' | 'progress' | 'config';
 
@@ -30,6 +33,7 @@ export default function App() {
   const [initialSessions, setInitialSessions] = useState<Session[] | null>(null);
   const [role, setRole] = useState<Role | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
+  const [setupIdentity, setSetupIdentity] = useState<{ provider: string; subject: string } | null>(null);
   const [lessonBusy, setLessonBusy] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
   const [install, setInstall] = useState<InstallEvent>();
@@ -53,7 +57,7 @@ export default function App() {
     void loadConfig().then(async config => {
       const auth = new ParentAuth(config);
       await auth.initialize();
-      if (lifetime.current === version) setRuntime({ auth, api: new Api(config, () => auth.token()) });
+      if (lifetime.current === version) setRuntime({ auth, api: new Api(config, () => auth.token()), config });
     }).catch(error => {
       if (lifetime.current === version) setSetupError(message(error));
     });
@@ -75,15 +79,15 @@ export default function App() {
     };
   }, []);
 
-  async function signIn() {
+  async function signIn(action: (auth: ParentAuth) => Promise<void>, social = false) {
     if (!runtime || authLock.current) return;
     authLock.current = true;
-    setAuthBusy(true); setError('');
+    setAuthBusy(true); setError(''); setSetupIdentity(null);
     let signedIn = false;
     const controller = new AbortController();
     authRequest.current = controller;
     try {
-      await runtime.auth.signIn();
+      await action(runtime.auth);
       signedIn = true;
       // A Microsoft identity alone does not grant access: the backend must allow this parent.
       const [sessions, me] = await Promise.all([
@@ -91,13 +95,16 @@ export default function App() {
       ]);
       if (!controller.signal.aborted) { setRole(me.role); setInitialSessions(sessions); }
     } catch (error) {
-      if (!controller.signal.aborted) setError(signedIn ? message(error) : c.authError);
+      if (!controller.signal.aborted) {
+        setError(signedIn || social ? message(error) : c.authError);
+        if (social && !signedIn) setSetupIdentity(runtime.auth.identityForSetup());
+      }
       controller.abort();
     } finally { authLock.current = false; setAuthBusy(false); }
   }
   async function signOut() {
     if (!runtime || authLock.current) return;
-    setInitialSessions(null); setRole(null); setError(''); setPrivacy(false);
+    setInitialSessions(null); setRole(null); setError(''); setPrivacy(false); setSetupIdentity(null);
     authLock.current = true; setAuthBusy(true);
     try { await runtime.auth.signOut(); }
     catch { setError(c.logoutError); }
@@ -137,9 +144,16 @@ export default function App() {
           {setupError ? <section className="setup-error" role="alert">
             <h2>{c.setup}</h2><p>{setupError}</p>
             <button onClick={() => setAttempt(value => value + 1)}>{c.retry}</button>
-          </section> : <button className="primary large" onClick={() => void signIn()} disabled={!runtime || authBusy || !online}>
+          </section> : <button className="primary large" onClick={() => void signIn(auth => auth.signIn())} disabled={!runtime || authBusy || !online}>
             {authBusy ? c.signingIn : !runtime ? c.loading : c.signIn}<span aria-hidden="true"> ↗</span>
           </button>}
+          {runtime?.config.microsoftPersonalClientId && <p><button disabled={authBusy || !online}
+            onClick={() => void signIn(auth => auth.signInMicrosoft(), true)}>{c.microsoftStudent}</button></p>}
+          {runtime?.config.googleClientId && <GoogleSignIn clientId={runtime.config.googleClientId}
+            disabled={authBusy || !online}
+            onCredential={(token, nonce) => void signIn(auth => auth.exchange('google', token, nonce), true)} />}
+          {runtime && !runtime.config.googleClientId && <p className="small">{c.googleUnavailable}</p>}
+          {setupIdentity && <p className="small">{c.identitySetup} ({setupIdentity.provider}): <code>{setupIdentity.subject}</code></p>}
           {authBusy && <p className="small" role="status">{c.loadingHistory}</p>}
           <p className="small">{c.parentNote}</p>
           <div className="privacy-strip"><span aria-hidden="true">◇</span><p>{c.privateNote}</p></div>
@@ -393,9 +407,11 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
     </div>}
     <div role="status" className="sr-only">{status}</div>
     {view === 'config' && adminAllowed
-      ? <PlanningCalendar api={api} language={language} online={online} onBusyChange={setPlannerBusy} onAccessDenied={() => {
+      ? <><AccessManagement api={api} language={language} online={online} onAccessDenied={() => {
         setAdminAllowed(false); setView('learn'); setError(c.adminDenied);
-      }} />
+      }} /><PlanningCalendar api={api} language={language} online={online} onBusyChange={setPlannerBusy} onAccessDenied={() => {
+        setAdminAllowed(false); setView('learn'); setError(c.adminDenied);
+      }} /></>
       : view === 'learn' ? <div className="learning-layout">
       <aside className="teacher-panel">
         <div className="panel-heading"><span className="eyebrow">StudentIQ</span><span className="live-dot">{c.ready}</span></div>

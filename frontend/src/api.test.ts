@@ -54,7 +54,7 @@ describe('backend adapter', () => {
     const controller = new AbortController();
     const api = new Api(config, async () => { controller.abort(); return 'token'; });
     await expect(api.sessions(controller.signal)).rejects.toThrow();
-    await expect(new Api(config, async () => { throw new Error('Parent required'); }).sessions()).rejects.toThrow('Parent authentication failed');
+    await expect(new Api(config, async () => { throw new Error('Parent required'); }).sessions()).rejects.toThrow('Authentication failed or expired');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

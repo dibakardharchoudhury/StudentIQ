@@ -19,7 +19,13 @@ const sessionsPageSchema = z.object({ sessions: z.array(sessionSchema), nextCurs
 const detailPageSchema = detailSchema.extend({ nextCursor });
 const replySchema = z.object({ sessionId: id, reply: z.string().min(1) });
 const speechSchema = z.object({ token: z.string().min(1), region: z.string().regex(/^[a-z0-9-]+$/) });
-const meSchema = z.object({ role: z.enum(['admin', 'student']) });
+const meSchema = z.object({ role: z.enum(['admin', 'parent', 'student']) });
+const socialAccountSchema = z.object({
+  id: z.string().regex(/^[a-f0-9]{64}$/),
+  provider: z.enum(['google', 'microsoft']),
+  subject: z.string().regex(/^[A-Za-z0-9_-]{1,255}$/),
+  role: z.enum(['parent', 'student']),
+});
 const reminderSchema = z.object({
   id, title: z.string().min(1), date: z.iso.date(), completed: z.boolean(),
 });
@@ -45,6 +51,7 @@ export type ChatEvent = z.infer<typeof eventSchema>;
 export type ChatInput = { sessionId?: string; subject: string; language: Language; message: string; mood?: Preferences['mood'] };
 export type SpeechToken = z.infer<typeof speechSchema>;
 export type Role = z.infer<typeof meSchema>['role'];
+export type SocialAccount = z.infer<typeof socialAccountSchema>;
 export type Reminder = z.infer<typeof reminderSchema>;
 export type ReminderInput = Pick<Reminder, 'title' | 'date'> | Reminder;
 export type PianoNote = typeof pianoNotes[number];
@@ -76,7 +83,7 @@ export class Api {
   private async response(path: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', signal?: AbortSignal, body?: unknown): Promise<Response> {
     let token: string;
     try { token = await this.accessToken(); }
-    catch { throw new ApiError('Parent authentication failed. Sign out and sign in again.'); }
+    catch { throw new ApiError('Authentication failed or expired. Sign out and sign in again.'); }
     signal?.throwIfAborted();
     let response: Response;
     try {
@@ -95,7 +102,7 @@ export class Api {
     }
     if (!response.ok) {
       if (response.status === 401) throw new ApiError('Your sign-in has expired. Sign out and sign in again.', 401);
-      if (response.status === 403) throw new ApiError('This parent is not allowed by the tutoring service. Contact the account administrator.', 403);
+      if (response.status === 403) throw new ApiError('This account is not allowed by the tutoring service. Contact the account administrator.', 403);
       throw new ApiError(`Tutoring service error (${response.status}). Nothing has been marked successful.`, response.status);
     }
     return response;
@@ -169,6 +176,22 @@ export class Api {
   }
   speechToken(signal?: AbortSignal) { return this.request('/api/speech/token', speechSchema, signal, {}); }
   me(signal?: AbortSignal) { return this.request('/api/me', meSchema, signal); }
+  async socialAccounts(signal?: AbortSignal) {
+    const result = await this.request('/api/access/accounts', z.object({ accounts: z.array(socialAccountSchema).max(20) }), signal);
+    if (new Set(result.accounts.map(account => account.id)).size !== result.accounts.length) {
+      throw new ApiError('API contract error: duplicate accounts.');
+    }
+    return result.accounts;
+  }
+  async saveSocialAccount(input: Omit<SocialAccount, 'id'>, signal?: AbortSignal) {
+    const result = socialAccountSchema.omit({ id: true }).safeParse(input);
+    if (!result.success) throw new ApiError('Enter a valid account identifier.');
+    await this.response('/api/access/accounts', 'POST', signal, result.data);
+  }
+  async removeSocialAccount(accountId: string, signal?: AbortSignal) {
+    if (!/^[a-f0-9]{64}$/.test(accountId)) throw new ApiError('Invalid account identifier.');
+    await this.response(`/api/access/accounts/${accountId}`, 'DELETE', signal);
+  }
   async reminders(signal?: AbortSignal): Promise<Reminder[]> {
     const result = await this.request('/api/planning/reminders', z.object({ reminders: z.array(reminderSchema) }), signal);
     if (new Set(result.reminders.map(item => item.id)).size !== result.reminders.length) {

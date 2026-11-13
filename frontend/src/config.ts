@@ -5,6 +5,8 @@ const configSchema = z.object({
   tenantId: z.string().uuid(),
   clientId: z.string().uuid(),
   apiScope: z.string().regex(/^(?:api|https):\/\/[^\s]+\/[^\s/]+$/, 'Use a full exposed API scope URI.'),
+  googleClientId: z.string().regex(/^[a-zA-Z0-9-]+\.apps\.googleusercontent\.com$/).optional(),
+  microsoftPersonalClientId: z.string().uuid().optional(),
 });
 export type AppConfig = z.infer<typeof configSchema>;
 

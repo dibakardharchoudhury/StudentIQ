@@ -11,13 +11,25 @@ export interface AuthConfig {
   parentOid: string;
   studentOid?: string;
   requiredScope: string;
+  googleClientId?: string;
+  microsoftClientId?: string;
 }
 
-export type UserRole = "admin" | "student";
+export type UserRole = "admin" | "parent" | "student";
+export const SOCIAL_STUDENT = "social-student";
+export const SOCIAL_PARENT = "social-parent";
+const CONSUMER_TENANT = "9188040d-6c67-4c5b-b112-36a304b66dad";
+const MICROSOFT_ISSUER = `https://login.microsoftonline.com/${CONSUMER_TENANT}/v2.0`;
+const googleKeys = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
+const microsoftKeys = createRemoteJWKSet(
+  new URL(`https://login.microsoftonline.com/${CONSUMER_TENANT}/discovery/v2.0/keys`)
+);
 
 export function roleForOid(oid: string, config: AuthConfig): UserRole {
   const normalized = oid.toLowerCase();
   if (normalized === config.parentOid.toLowerCase()) return "admin";
+  if (normalized === SOCIAL_STUDENT) return "student";
+  if (normalized === SOCIAL_PARENT) return "parent";
   if (config.studentOid && normalized === config.studentOid.toLowerCase()) return "student";
   throw new AuthenticationError(403);
 }
@@ -74,13 +86,46 @@ export async function verifyAccessToken(
     throw new AuthenticationError(401);
   }
 
-  if (payload.tid !== config.tenantId || typeof payload.oid !== "string") {
+  if (payload.tid !== config.tenantId || typeof payload.oid !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.oid)) {
     throw new AuthenticationError(403);
   }
   roleForOid(payload.oid, config);
 
   if (typeof payload.scp !== "string" ||
       !payload.scp.split(/\s+/).includes(config.requiredScope)) {
+    throw new AuthenticationError(403);
+  }
+  return payload;
+}
+
+export async function verifySocialToken(
+  token: string,
+  provider: "google" | "microsoft",
+  config: AuthConfig,
+  nonce: string,
+  keyResolver: JWTVerifyGetKey = provider === "google" ? googleKeys : microsoftKeys
+): Promise<JWTPayload> {
+  const audience = provider === "google" ? config.googleClientId : config.microsoftClientId;
+  if (!audience) throw new AuthenticationError(403);
+  let payload: JWTPayload;
+  try {
+    ({ payload } = await jwtVerify(token, keyResolver, {
+      algorithms: ["RS256"],
+      issuer: provider === "google" ? ["accounts.google.com", "https://accounts.google.com"] : MICROSOFT_ISSUER,
+      audience,
+      requiredClaims: ["exp", "iat", "iss", "aud", "sub", "nonce"],
+      maxTokenAge: "5 minutes",
+      clockTolerance: 5
+    }));
+  } catch {
+    throw new AuthenticationError(401);
+  }
+  if (payload.nonce !== nonce || typeof payload.sub !== "string" ||
+      !/^[A-Za-z0-9_-]{1,255}$/.test(payload.sub) ||
+      (provider === "google" && (payload.email_verified !== true ||
+        (payload.azp !== undefined && payload.azp !== audience))) ||
+      (provider === "microsoft" && (payload.tid !== CONSUMER_TENANT || payload.ver !== "2.0"))) {
     throw new AuthenticationError(403);
   }
   return payload;

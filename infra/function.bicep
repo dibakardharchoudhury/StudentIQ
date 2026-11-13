@@ -4,6 +4,8 @@ param location string = resourceGroup().location
 param parentObjectId string
 param studentObjectId string = ''
 param appClientId string
+param googleClientId string = ''
+param microsoftPersonalClientId string = ''
 param pagesOrigin string = 'https://dibakardharchoudhury.github.io'
 
 var suffix = uniqueString(resourceGroup().id)
@@ -175,6 +177,8 @@ resource settings 'Microsoft.Web/sites/config@2024-04-01' = {
     ENTRA_PARENT_OID: parentObjectId
     ENTRA_STUDENT_OID: studentObjectId
     ENTRA_REQUIRED_SCOPE: 'access_as_user'
+    GOOGLE_CLIENT_ID: googleClientId
+    MICROSOFT_PERSONAL_CLIENT_ID: microsoftPersonalClientId
     GITHUB_PAGES_ORIGIN: pagesOrigin
     AZURE_STORAGE_BLOB_ENDPOINT: dataStorage.properties.primaryEndpoints.blob
     BLOB_CONTAINER_NAME: 'learning-history'

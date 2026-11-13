@@ -11,6 +11,8 @@ import { ReminderRepository } from "../src/reminders.js";
 import { PianoRepository } from "../src/piano.js";
 import { PreferencesRepository } from "../src/preferences.js";
 import { QuizRepository } from "../src/quiz.js";
+import { SocialDirectory } from "../src/social-directory.js";
+import { SOCIAL_PARENT, SOCIAL_STUDENT } from "../src/auth.js";
 
 class MemoryBlobStore implements JsonBlobStore {
   private readonly values = new Map<string, { value: unknown; etag: string }>();
@@ -67,6 +69,7 @@ function dependencies(authorize: ApiDependencies["authorize"]): ApiDependencies 
   const blobs = new MemoryBlobStore();
   return {
     config: { ...config },
+    socialDirectory: new SocialDirectory(blobs, config.parentOid),
     repository: new SessionRepository(blobs),
     reminders: new ReminderRepository(blobs),
     piano: new PianoRepository(blobs),
@@ -98,6 +101,30 @@ test("all application routes require a successful token validator", async () => 
   const allowed = dependencies(async () => config.parentOid);
   const health = await dispatch(request("health"), createOperations().health, allowed, { authenticated: false });
   assert.equal(health.status, 200);
+});
+
+test("only the administrator can approve, list, or revoke parent and student accounts", async () => {
+  const operations = createOperations();
+  const deps = dependencies(async () => config.parentOid);
+  const body = JSON.stringify({ provider: "google", subject: "subject-123", role: "parent" });
+  const save = () => request("access/accounts", { method: "POST", headers: { "content-type": "application/json" }, body });
+  for (const principal of [SOCIAL_STUDENT, SOCIAL_PARENT]) {
+    deps.authorize = async () => principal;
+    assert.equal((await dispatch(save(), operations.saveAccount, deps, { adminOnly: true })).status, 403);
+    assert.equal((await dispatch(request("access/accounts"), operations.listAccounts, deps, { adminOnly: true })).status, 403);
+  }
+  deps.authorize = async () => config.parentOid;
+  assert.equal((await dispatch(save(), operations.saveAccount, deps, { adminOnly: true })).status, 200);
+  const listed = await dispatch(request("access/accounts"), operations.listAccounts, deps, { adminOnly: true });
+  const account = (listed.jsonBody as { accounts: { id: string; role: string }[] }).accounts[0]!;
+  assert.equal(account.role, "parent");
+  const remove = request(`access/accounts/${account.id}`, { method: "DELETE" });
+  remove.params.id = account.id;
+  deps.authorize = async () => SOCIAL_PARENT;
+  assert.equal((await dispatch(remove, operations.removeAccount, deps, { adminOnly: true })).status, 403);
+  deps.authorize = async () => config.parentOid;
+  assert.equal((await dispatch(remove, operations.removeAccount, deps, { adminOnly: true })).status, 200);
+  assert.equal((await deps.socialDirectory!.list()).length, 0);
 });
 
 test("Speech response preserves contract and no-store, and cannot bypass parent authorization", async () => {

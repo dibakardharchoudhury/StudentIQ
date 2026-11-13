@@ -10,6 +10,9 @@ import { PianoRepository } from "./piano.js";
 import { PreferencesRepository } from "./preferences.js";
 import { QuizRepository } from "./quiz.js";
 import { FoundryQuizGenerator } from "./quiz-model.js";
+import { authorizeRequest } from "./auth.js";
+import { SocialAuth } from "./social-auth.js";
+import { SocialDirectory } from "./social-directory.js";
 
 let sharedDependencies: ApiDependencies | undefined;
 
@@ -18,8 +21,15 @@ function dependencies(): ApiDependencies {
   const config = getConfig();
   const blobs = new AzureJsonBlobStore(config.blobEndpoint, config.blobContainer);
   const repository = new SessionRepository(blobs);
+  const socialDirectory = new SocialDirectory(blobs, config.parentOid);
+  const socialAuth = new SocialAuth(blobs, socialDirectory);
   sharedDependencies = {
     config,
+    socialAuth,
+    socialDirectory,
+    authorize: (authorization, authConfig) => authorization?.startsWith("Bearer s1.")
+      ? socialAuth.authorize(authorization, authConfig)
+      : authorizeRequest(authorization, authConfig),
     repository,
     reminders: new ReminderRepository(blobs),
     piano: new PianoRepository(blobs),
@@ -78,6 +88,11 @@ const operations = createOperations();
 
 register("health", "health", ["GET"], operations.health, { authenticated: false });
 register("me", "me", ["GET"], operations.me);
+register("social-session", "social/session", ["POST"], operations.socialSession, { authenticated: false });
+register("social-logout", "social/logout", ["POST"], operations.socialLogout);
+register("access-list", "access/accounts", ["GET"], operations.listAccounts, { adminOnly: true });
+register("access-save", "access/accounts", ["POST"], operations.saveAccount, { adminOnly: true });
+register("access-remove", "access/accounts/{id}", ["DELETE"], operations.removeAccount, { adminOnly: true });
 register("preferences-get", "preferences", ["GET"], operations.getPreferences);
 register("preferences-put", "preferences", ["PUT"], operations.putPreferences);
 register("quiz-post", "quiz", ["POST"], operations.createQuiz);

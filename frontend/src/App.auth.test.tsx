@@ -26,7 +26,7 @@ describe('parent backend authorization gate', () => {
   it('does not open the workspace when Microsoft sign-in succeeds but the backend rejects the parent', async () => {
     state.sessions.mockRejectedValue(new Error('This parent is not allowed'));
     render(<App />);
-    const signIn = await screen.findByRole('button', { name: /Parent sign-in/ });
+    const signIn = await screen.findByRole('button', { name: /Administrator sign-in/ });
     await waitFor(() => expect(signIn).toBeEnabled());
     fireEvent.click(signIn);
     expect(await screen.findByRole('alert')).toHaveTextContent('This parent is not allowed');
@@ -37,10 +37,10 @@ describe('parent backend authorization gate', () => {
     let allow!: (value: []) => void;
     state.sessions.mockReturnValue(new Promise(resolve => { allow = resolve; }));
     render(<App />);
-    const signIn = await screen.findByRole('button', { name: /Parent sign-in/ });
+    const signIn = await screen.findByRole('button', { name: /Administrator sign-in/ });
     await waitFor(() => expect(signIn).toBeEnabled());
     fireEvent.click(signIn);
-    await screen.findByRole('button', { name: /Checking parent access/ });
+    await screen.findByRole('button', { name: /Checking account access/ });
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     allow([]);
     await screen.findByRole('textbox');
@@ -55,18 +55,26 @@ describe('parent backend authorization gate', () => {
     state.sessions.mockResolvedValue([]);
     state.me.mockReturnValue(new Promise(resolve => { confirm = resolve; }));
     render(<App />);
-    const signIn = await screen.findByRole('button', { name: /Parent sign-in/ });
+    const signIn = await screen.findByRole('button', { name: /Administrator sign-in/ });
     fireEvent.click(signIn);
     await waitFor(() => expect(state.me).toHaveBeenCalledOnce());
     expect(screen.queryByRole('button', { name: /Configuration/ })).not.toBeInTheDocument();
     confirm({ role: 'admin' });
     expect(await screen.findByRole('button', { name: /Configuration/ })).toBeInTheDocument();
   });
+  it('does not expose Configuration to an approved parent', async () => {
+    state.sessions.mockResolvedValue([]);
+    state.me.mockResolvedValue({ role: 'parent' });
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: /Administrator sign-in/ }));
+    await screen.findByRole('textbox');
+    expect(screen.queryByRole('button', { name: /Configuration/ })).not.toBeInTheDocument();
+  });
   it('fails closed if the role request fails even when sessions would be allowed', async () => {
     state.sessions.mockResolvedValue([]);
     state.me.mockRejectedValue(new Error('Role unavailable'));
     render(<App />);
-    fireEvent.click(await screen.findByRole('button', { name: /Parent sign-in/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Administrator sign-in/ }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Role unavailable');
     expect(screen.queryByRole('button', { name: /Configuration/ })).not.toBeInTheDocument();
   });

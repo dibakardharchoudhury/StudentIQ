@@ -10,6 +10,8 @@ export interface AppConfig extends QuotaSettings {
   parentOid: string;
   studentOid?: string;
   requiredScope: string;
+  googleClientId?: string;
+  microsoftClientId?: string;
   githubPagesOrigin: string;
   blobEndpoint: string;
   blobContainer: string;
@@ -63,6 +65,8 @@ export function getConfig(): AppConfig {
   const studentOid = process.env.ENTRA_STUDENT_OID?.trim().toLowerCase() || undefined;
   const audience = required("ENTRA_API_AUDIENCE");
   const requiredScope = required("ENTRA_REQUIRED_SCOPE");
+  const googleClientId = process.env.GOOGLE_CLIENT_ID?.trim() || undefined;
+  const microsoftClientId = process.env.MICROSOFT_PERSONAL_CLIENT_ID?.trim() || undefined;
   const blobContainer = required("BLOB_CONTAINER_NAME");
   const speechRegion = required("AZURE_SPEECH_REGION").toLowerCase();
   const speechIdentityClientId = required("SPEECH_IDENTITY_CLIENT_ID");
@@ -73,6 +77,8 @@ export function getConfig(): AppConfig {
 
   if (!GUID_PATTERN.test(tenantId) || !GUID_PATTERN.test(parentOid) ||
       (studentOid !== undefined && (!GUID_PATTERN.test(studentOid) || studentOid === parentOid)) ||
+      (googleClientId !== undefined && !/^[a-zA-Z0-9-]+\.apps\.googleusercontent\.com$/.test(googleClientId)) ||
+      (microsoftClientId !== undefined && !GUID_PATTERN.test(microsoftClientId)) ||
       !audience || /\s/.test(audience) || /\s/.test(requiredScope) ||
       !/^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])$/.test(blobContainer) ||
       !/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(speechRegion) ||
@@ -89,6 +95,8 @@ export function getConfig(): AppConfig {
     parentOid,
     ...(studentOid ? { studentOid } : {}),
     requiredScope,
+    ...(googleClientId ? { googleClientId } : {}),
+    ...(microsoftClientId ? { microsoftClientId } : {}),
     githubPagesOrigin: httpsOrigin(required("GITHUB_PAGES_ORIGIN")),
     blobEndpoint: httpsEndpoint(required("AZURE_STORAGE_BLOB_ENDPOINT"), "Blob endpoint", true),
     blobContainer,

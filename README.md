@@ -13,8 +13,8 @@ gaze. Learning scores are based on recorded practice, not attention.
 ## Architecture
 
 - React and TypeScript PWA, published as static files on GitHub Pages.
-- Azure Functions Flex Consumption API with Microsoft Entra bearer-token
-  verification and a server-side allowlist.
+- Azure Functions Flex Consumption API with administrator-controlled Google and
+  Microsoft personal sign-in for parents and learners.
 - A new Foundry account and project with Data Zone Model Router in cost mode.
 - Azure Speech with a separately scoped managed identity; no service key is sent
   to the browser. The short-lived Speech bearer token is a credential.
@@ -28,18 +28,57 @@ and data are protected independently.
 
 ## Security and privacy
 
-Sign in as the configured parent/admin. A separate student identity must be
-explicitly configured before the app can distinguish a student from an
-administrator. Do not hand a child an administrator session and expect the
-admin-only configuration page to remain protected.
+The existing work/school Entra identity remains the bootstrap administrator.
+Parents and learners do not need an account in that tenant: the administrator
+can separately approve a Google or Microsoft personal account as a parent or
+student. Both can access the shared learning history and tutoring features;
+neither can manage access or the server-protected planning endpoints. Do not
+give a child an administrator session.
 
-After creating or selecting an appropriate separate identity in the same Entra
-tenant, set its object ID as `ENTRA_STUDENT_OID` on the Function App. It must
-differ from `ENTRA_PARENT_OID`. Supply the same ID as `studentObjectId` when
-redeploying `infra\function.bicep`, so infrastructure updates preserve access.
-The identity must be able to sign in and obtain the app's delegated scope.
-Verify that student sign-in works and that its API requests to `/api/planning`
-are rejected before handing over the device.
+Social access is disabled until the administrator approves the exact provider
+subject (`sub`) in Configuration. A verified provider signature, issuer,
+audience, expiry and nonce are required before a short-lived session is issued. Each
+provider assertion is accepted once. Sessions expire after 30 minutes and are
+kept in browser memory only; signing out revokes the app session but does not
+necessarily sign out of Google or Microsoft. Requests and learning records
+continue to use the existing shared family history. Removing an account or
+changing its role immediately invalidates its existing sessions; re-approval
+does not reactivate old sessions.
+
+### Approving an account
+
+1. The dedicated Microsoft personal SPA registration is
+   `fa5a0009-06ab-47d1-9fec-992bbf54f72c` and its only production callback is
+   `https://dibakardharchoudhury.github.io/StudentIQ/auth.html`. The API setting
+   `MICROSOFT_PERSONAL_CLIENT_ID` must match the public
+   `microsoftPersonalClientId` in `frontend\public\config.json`.
+2. For Google, create a **new** Google Cloud OAuth web client, authorize the
+   JavaScript origin `https://dibakardharchoudhury.github.io`, and set the
+   resulting public client ID in both frontend `googleClientId` and API
+   `GOOGLE_CLIENT_ID`. Publish the frontend. Follow Google's consent-screen and
+   test-user requirements. Do not reuse another application's credentials.
+3. Under administrator supervision, sign in with the intended account. Until
+   approved, access is denied and the page displays its **unverified** setup
+   identifier. Confirm the selected account with the provider; never approve
+   an identifier supplied by an unknown person. Sign in as administrator in a
+   separate browser or device, open Configuration, and add the provider,
+   case-sensitive identifier and role. Do not put identifiers in Git, URLs, or
+   logs. Each provider account must be approved independently.
+4. Sign in again, confirm the approved account sees the shared history and
+   cannot access Configuration or the planning API, and confirm administrator
+   sign-in still works. Remove an entry in Configuration to revoke access.
+
+Provider parental-consent rules may block a supervised child account until its
+parent permits third-party sign-in. Account approval is not a substitute for
+reviewing the provider's age, consent, and privacy requirements.
+
+`infra\function.bicep` accepts the social client IDs. Supply them again when
+redeploying that template: defaults are empty and would disable provider
+sign-in. Approvals are stored separately in private family storage. The separate
+`infra\social-auth-retention.bicep` deletes only `learning-history/social-auth/`
+records after two days, subject to Azure's periodic lifecycle processing and
+seven-day soft deletion. It defines the account-wide management policy, so
+merge any other rules into it before deploying if a policy already exists.
 
 Voice capture requires a user gesture and permission. Audio is sent to Azure
 Speech; learning messages are sent to the backend and model. Audio recordings

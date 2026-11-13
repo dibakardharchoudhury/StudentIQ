@@ -29,6 +29,8 @@ import {
 } from "./reminders.js";
 import { PianoRepository, validatePianoInput } from "./piano.js";
 import { PreferencesRepository } from "./preferences.js";
+import type { SocialAuth } from "./social-auth.js";
+import type { SocialDirectory } from "./social-directory.js";
 import {
   QuizRepository, QuizAnswerConflictError, QuizDuplicateError, QuizNotFoundError,
   UnsupportedQuizSubjectError, validateQuizInput, validateQuizAnswer, type QuizGenerator
@@ -48,6 +50,8 @@ export interface ApiDependencies {
   quota: Pick<DailyQuotaRepository, "consume">;
   config: ReturnType<typeof getConfig>;
   authorize?: typeof authorizeRequest;
+  socialAuth?: SocialAuth;
+  socialDirectory?: SocialDirectory;
   logError?: DiagnosticLogger;
 }
 
@@ -222,6 +226,34 @@ export function createOperations() {
 
   const me: Operation = async (_request, principalOid, { config }) =>
     json(200, { role: roleForOid(principalOid, config) });
+
+  const socialSession: Operation = async (request, _principalOid, { socialAuth, config }) => {
+    if (!socialAuth) throw new Error("Social authentication is unavailable.");
+    return json(200, await socialAuth.exchange(await readJson(request), config));
+  };
+
+  const socialLogout: Operation = async (request, _principalOid, { socialAuth }) => {
+    if (!socialAuth) throw new Error("Social authentication is unavailable.");
+    await socialAuth.revoke(request.headers.get("authorization"));
+    return json(200, { signedOut: true });
+  };
+
+  const listAccounts: Operation = async (_request, principalOid, { socialDirectory, config }) => {
+    requireAdmin(principalOid, config);
+    if (!socialDirectory) throw new Error("Access directory is unavailable.");
+    return json(200, { accounts: await socialDirectory.list() });
+  };
+  const saveAccount: Operation = async (request, principalOid, { socialDirectory, config }) => {
+    requireAdmin(principalOid, config);
+    if (!socialDirectory) throw new Error("Access directory is unavailable.");
+    return json(200, { account: await socialDirectory.save(await readJson(request)) });
+  };
+  const removeAccount: Operation = async (request, principalOid, { socialDirectory, config }) => {
+    requireAdmin(principalOid, config);
+    if (!socialDirectory) throw new Error("Access directory is unavailable.");
+    await socialDirectory.remove(request.params.id ?? "");
+    return json(200, { removed: true });
+  };
 
   const getPreferences: Operation = async (_request, _principalOid, { config, preferences }) => {
     try {
@@ -415,7 +447,8 @@ export function createOperations() {
   };
 
   return {
-    health, me, getPreferences, putPreferences, createQuiz, answerQuiz, quizAttempts,
+    health, me, socialSession, socialLogout, listAccounts, saveAccount, removeAccount,
+    getPreferences, putPreferences, createQuiz, answerQuiz, quizAttempts,
     listReminders, saveReminder, deleteReminder,
     recordPiano, listPiano, listSessions, getSession, chat, speechToken
   };
