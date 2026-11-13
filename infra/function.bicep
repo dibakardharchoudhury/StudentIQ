@@ -180,7 +180,7 @@ resource settings 'Microsoft.Web/sites/config@2024-04-01' = {
     BLOB_CONTAINER_NAME: 'learning-history'
     FOUNDRY_ENDPOINT: foundry.properties.endpoint
     FOUNDRY_MODEL: 'model-router'
-    FOUNDRY_API_VERSION: '2024-05-01-preview'
+    FOUNDRY_API_VERSION: '2024-10-21'
     SPEECH_IDENTITY_CLIENT_ID: speechIdentity.properties.clientId
     SPEECH_RESOURCE_ID: speech.id
     AZURE_SPEECH_REGION: location

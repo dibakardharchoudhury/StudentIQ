@@ -69,7 +69,7 @@ export function getConfig(): AppConfig {
   const speechResourceId = required("SPEECH_RESOURCE_ID");
   validateSpeechIdentity(speechIdentityClientId, speechResourceId);
   const foundryModel = process.env.FOUNDRY_MODEL?.trim() || "model-router";
-  const foundryApiVersion = process.env.FOUNDRY_API_VERSION?.trim() || "2024-05-01-preview";
+  const foundryApiVersion = process.env.FOUNDRY_API_VERSION?.trim() || "2024-10-21";
 
   if (!GUID_PATTERN.test(tenantId) || !GUID_PATTERN.test(parentOid) ||
       (studentOid !== undefined && (!GUID_PATTERN.test(studentOid) || studentOid === parentOid)) ||
@@ -77,7 +77,7 @@ export function getConfig(): AppConfig {
       !/^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])$/.test(blobContainer) ||
       !/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(speechRegion) ||
       !/^[a-zA-Z0-9._-]{1,100}$/.test(foundryModel) ||
-      !/^[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-zA-Z0-9-]+$/.test(foundryApiVersion)) {
+      !/^[0-9]{4}-[0-9]{2}-[0-9]{2}(?:-[a-zA-Z0-9-]+)?$/.test(foundryApiVersion)) {
     throw new Error("Invalid application configuration.");
   }
 

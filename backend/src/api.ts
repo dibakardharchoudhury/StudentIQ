@@ -202,6 +202,7 @@ export async function dispatch(
       logUnexpectedFailure(dependencies.logError, options.operationName ?? "chat-post", error.category);
       response = json(503, {
         error: "Chat did not complete. Saving could not be fully confirmed. Check session history and retry with this sessionId and the same Idempotency-Key.",
+        category: error.category,
         sessionId: error.sessionId,
         idempotencyKey: error.idempotencyKey
       });

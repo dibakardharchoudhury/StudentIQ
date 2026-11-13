@@ -35,6 +35,12 @@ function compact(value: string, limit: number): string {
   return value.replace(/\s+/g, " ").trim().slice(0, limit);
 }
 
+export function foundryChatUrl(config: AppConfig): URL {
+  const url = new URL(`${config.foundryEndpoint}/openai/deployments/${encodeURIComponent(config.foundryModel)}/chat/completions`);
+  url.searchParams.set("api-version", config.foundryApiVersion);
+  return url;
+}
+
 function systemPrompt(language: Language, subject: string, context: TutorContext, mood: Mood): string {
   const languageName = language === "en" ? "English" : "Norwegian Bokmål";
   const progress = context.subjectSummary
@@ -110,8 +116,7 @@ export class FoundryTutor implements Tutor {
       throw new Error("Model authentication failed.");
     }
 
-    const url = new URL(`${this.config.foundryEndpoint}/models/chat/completions`);
-    url.searchParams.set("api-version", this.config.foundryApiVersion);
+    const url = foundryChatUrl(this.config);
     const messages = [
       {
         role: "system",

@@ -1,7 +1,24 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { idempotentUuid, type BlobValue, type ChatEvent, type Interaction, type JsonBlobStore } from "../src/contracts.js";
-import { HistoryPreparingError, SessionRepository } from "../src/storage.js";
+import { AzureJsonBlobStore, HistoryPreparingError, SessionRepository } from "../src/storage.js";
+
+test("Azure conditional creates handle existing blobs without hiding unrelated conflicts", async () => {
+  for (const [statusCode, code, expectedConflict] of [
+    [409, "BlobAlreadyExists", true],
+    [412, "ConditionNotMet", true],
+    [409, "LeaseIdMismatchWithBlobOperation", false]
+  ] as const) {
+    const failure = Object.assign(new Error("storage error"), { statusCode, code });
+    const store = new AzureJsonBlobStore("https://example.blob.core.windows.net", "test-container");
+    Object.defineProperty(store, "container", { value: {
+      createIfNotExists: async () => {},
+      getBlockBlobClient: () => ({ uploadData: async () => { throw failure; } })
+    } });
+    if (expectedConflict) assert.equal(await store.create("existing.json", {}), false);
+    else await assert.rejects(store.create("existing.json", {}), failure);
+  }
+});
 
 class MemoryBlobStore implements JsonBlobStore {
   private readonly values = new Map<string, { value: unknown; etag: string }>();

@@ -1,6 +1,6 @@
 import type { AppConfig } from "./config.js";
 import { createAzureCredential } from "./azure-credential.js";
-import { findFiltered, readBoundedBody } from "./services.js";
+import { findFiltered, foundryChatUrl, readBoundedBody } from "./services.js";
 import { validateGeneratedQuiz, type GeneratedQuiz, type QuizGenerator, type QuizInput } from "./quiz.js";
 
 export class FoundryQuizGenerator implements QuizGenerator {
@@ -13,8 +13,7 @@ export class FoundryQuizGenerator implements QuizGenerator {
   async generate(input: QuizInput, recentQuestions: string[]): Promise<GeneratedQuiz> {
     const token = await this.credential.getToken("https://cognitiveservices.azure.com/.default");
     if (!token?.token) throw new Error("Quiz model authentication failed.");
-    const url = new URL(`${this.config.foundryEndpoint}/models/chat/completions`);
-    url.searchParams.set("api-version", this.config.foundryApiVersion);
+    const url = foundryChatUrl(this.config);
     const response = await this.request(url, {
       method: "POST",
       headers: { Authorization: `Bearer ${token.token}`, "Content-Type": "application/json" },

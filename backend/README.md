@@ -35,17 +35,18 @@ identity; otherwise the system-assigned identity is used. It must not equal
 `SPEECH_IDENTITY_CLIENT_ID`. Do not set `NODE_ENV=development`
 in Azure, since that explicitly enables the local `DefaultAzureCredential` chain.
 `FOUNDRY_MODEL` defaults to `model-router`; `FOUNDRY_API_VERSION` defaults to
-`2024-05-01-preview`. The Function App managed identity must be granted Azure AI
-inference permission on the Foundry resource and `Storage Blob Data Contributor`
+`2024-10-21`. The deployment-specific OpenAI chat endpoint is used with the
+Function App's scoped Cognitive Services OpenAI User role. The managed identity
+must be granted inference permission on the Foundry resource and `Storage Blob Data Contributor`
 on the private container/storage account. Attach a separate user-assigned
 identity to the Function App and grant it **Cognitive Services Speech User**
 at the Speech resource scope only. It must have no Foundry/Blob permissions
 (including inherited roles); audit those assignments before deployment.
 `SPEECH_RESOURCE_ID` and `AZURE_SPEECH_REGION` must identify that Speech account.
 Keep `disableLocalAuth=true`; remove the obsolete Speech key app setting and
-any unused Key Vault reference. Those resources, roles, Entra app registrations,
-and Azure-host CORS settings are not
-provisioned by this project. Keep the Blob container private and disable
+any unused Key Vault reference. The repository's infrastructure templates
+describe these Azure resources and roles; the Entra registration requires
+separate directory configuration. Keep the Blob container private and disable
 anonymous Blob access at the storage account; grant the Function identity only
 the required data-plane role. Identity attachment, RBAC isolation, resource
 matching, and tenant policy require Azure-side configuration and verification;

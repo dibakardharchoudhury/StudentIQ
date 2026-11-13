@@ -99,7 +99,9 @@ export class AzureJsonBlobStore implements JsonBlobStore {
       });
       return true;
     } catch (error) {
-      if (statusCode(error) === 412) {
+      if (statusCode(error) === 412 ||
+          (statusCode(error) === 409 && error && typeof error === "object" &&
+            "code" in error && error.code === "BlobAlreadyExists")) {
         return false;
       }
       throw error;

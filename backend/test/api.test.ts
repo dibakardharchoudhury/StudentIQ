@@ -57,7 +57,7 @@ const config = {
   blobContainer: "studentiq-private",
   foundryEndpoint: "https://example.services.ai.azure.com",
   foundryModel: "model-router",
-  foundryApiVersion: "2024-05-01-preview",
+  foundryApiVersion: "2024-10-21",
   speechIdentityClientId: "44444444-4444-4444-8444-444444444444",
   speechResourceId: "/subscriptions/11111111-1111-4111-8111-111111111111/resourceGroups/studentiq/providers/Microsoft.CognitiveServices/accounts/studentiq-speech",
   speechRegion: "eastus"
@@ -171,7 +171,8 @@ test("model failures leave the original user event in history and return a repla
   });
   const failed = await dispatch(makeRequest(), createOperations().chat, deps);
   assert.equal(failed.status, 503);
-  const recovery = failed.jsonBody as { sessionId: string; idempotencyKey: string };
+  const recovery = failed.jsonBody as { category: string; sessionId: string; idempotencyKey: string };
+  assert.equal(recovery.category, "model");
   assert.ok(recovery.sessionId);
   assert.ok(recovery.idempotencyKey);
   const history = await deps.repository.getSession(config.parentOid, recovery.sessionId);

@@ -15,7 +15,7 @@ const config: AppConfig = {
   blobContainer: "studentiq-private",
   foundryEndpoint: "https://example.services.ai.azure.com",
   foundryModel: "model-router",
-  foundryApiVersion: "2024-05-01-preview",
+  foundryApiVersion: "2024-10-21",
   speechIdentityClientId: "44444444-4444-4444-8444-444444444444",
   speechResourceId: "/subscriptions/11111111-1111-4111-8111-111111111111/resourceGroups/studentiq/providers/Microsoft.CognitiveServices/accounts/studentiq-speech",
   speechRegion: "eastus",
@@ -65,8 +65,8 @@ test("tutor sends bounded single-call Q&A guidance for school, music, and langua
   }, async (url, init) => {
     calls++;
     const endpoint = new URL(String(url));
-    assert.equal(endpoint.pathname, "/models/chat/completions");
-    assert.equal(endpoint.searchParams.get("api-version"), "2024-05-01-preview");
+    assert.equal(endpoint.pathname, "/openai/deployments/model-router/chat/completions");
+    assert.equal(endpoint.searchParams.get("api-version"), "2024-10-21");
     const payload = JSON.parse(String(init?.body)) as {
       max_tokens: number;
       messages: { role: string; content: string }[];
@@ -128,7 +128,7 @@ test("quiz model uses one bounded JSON generation call and rejects filtered or m
   let calls = 0;
   const generator = new FoundryQuizGenerator(config, credential, async (url, init) => {
     calls++;
-    assert.equal(new URL(String(url)).pathname, "/models/chat/completions");
+    assert.equal(new URL(String(url)).pathname, "/openai/deployments/model-router/chat/completions");
     const body = JSON.parse(String(init?.body)) as {
       max_tokens: number; response_format: { type: string }; messages: { content: string }[];
     };
