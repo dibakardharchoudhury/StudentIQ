@@ -6,6 +6,7 @@ const fetchMock = vi.fn<typeof fetch>();
 beforeEach(() => {
   vi.stubEnv('PROD', true);
   vi.stubEnv('VITE_APP_VERSION', 'current-build');
+  vi.stubEnv('VITE_APP_RELEASE', '1.0.0');
   vi.stubEnv('VITE_BUILD_TIME', '2026-11-14T12:00:00.000Z');
   vi.stubGlobal('fetch', fetchMock);
   fetchMock.mockReset();
@@ -15,6 +16,8 @@ afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.restoreAllMocks(
 it('shows Norwegian local build time and checks the deployed version without caching or cookies', async () => {
   fetchMock.mockResolvedValue(new Response(JSON.stringify({ version: 'current-build', builtAt: '2026-11-14T12:00:00Z' })));
   render(<BuildStatus language="en" busy={false} hasDraft={false} />);
+  expect(screen.getByText('1.0.0')).toBeInTheDocument();
+  expect(screen.queryByText('current-build')).not.toBeInTheDocument();
   expect(screen.getByText(/Built/)).toHaveTextContent('13:00:00');
   expect(screen.getByText(/Built/)).toHaveTextContent('Europe/Oslo');
   await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('version.json'),

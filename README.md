@@ -64,8 +64,10 @@ consent are configured; StudentIQ cannot create a Google client in Azure.
 
 ### Published version and updates
 
-The footer displays the exact build version and timestamp in **Europe/Oslo**
-(Norwegian local time, including daylight-saving time). Public `version.json`
+The footer displays the release version (for example, **1.0.0**) and a separate
+build timestamp in **Europe/Oslo** (Norwegian local time, including daylight-saving
+time). The unique timestamped build ID stays internal for update detection, so
+rebuilds of the same release are still detected. Public `version.json`
 is fetched without caching on load, once per minute, and when returning to the
 tab. A newer build offers an explicit refresh, disabled while an operation is
 busy, with confirmation before discarding an unsent question. Refreshing clears

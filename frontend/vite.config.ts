@@ -124,6 +124,7 @@ export default defineConfig(({ mode }) => {
   return {
     base,
     define: {
+      'import.meta.env.VITE_APP_RELEASE': JSON.stringify(packageVersion),
       'import.meta.env.VITE_APP_VERSION': JSON.stringify(buildVersion),
       'import.meta.env.VITE_BUILD_TIME': JSON.stringify(builtAt),
     },

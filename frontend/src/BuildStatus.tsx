@@ -59,7 +59,7 @@ export default function BuildStatus({ language, busy, hasDraft }: {
     timeZone: 'Europe/Oslo', dateStyle: 'medium', timeStyle: 'long',
   }).format(new Date(builtAt));
   return <div className="build-status">
-    <span>{c.version} <code>{version}</code></span>
+    <span>{c.version} <code>{import.meta.env.VITE_APP_RELEASE}</code></span>
     <span>{c.built} <time dateTime={builtAt}>{timestamp}</time> · Europe/Oslo</span>
     {latest && latest !== version && <div role="status">
       <button type="button" disabled={busy} onClick={() => {
