@@ -235,7 +235,7 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
   const mutedRef = useRef(true);
   const micRef = useRef<'off' | 'listening' | 'finishing'>('off');
   const speech = useRef<Speech | null>(null);
-  const transcriptEnd = useRef<HTMLDivElement>(null);
+  const conversation = useRef<HTMLDivElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const lessonLanguage = useRef(language);
 
@@ -284,7 +284,7 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
     }
   }, [language, cancelVoice]);
   useEffect(() => {
-    transcriptEnd.current?.scrollIntoView?.({ behavior: 'instant', block: 'nearest' });
+    if (conversation.current) conversation.current.scrollTop = conversation.current.scrollHeight;
   }, [exchanges, detail]);
 
   function beginRequest(history = false) {
@@ -480,7 +480,7 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
               });
             }
           }} />
-        <div className="conversation" role="region" tabIndex={0}
+        <div ref={conversation} className="conversation" role="region" tabIndex={0}
           aria-label={language === 'nb' ? 'Samtale' : 'Conversation'} aria-busy={busy}>
           {!utterances.length && <div className="empty-conversation">
             <span className="discovery-mark" aria-hidden="true">✦</span>
@@ -500,7 +500,6 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
             </li>)}
           </ol>
           {busy && !loadingHistory && <p className="thinking" role="status">{c.sending}</p>}
-          <div ref={transcriptEnd} />
         </div>
         <form className="composer" onSubmit={event => void send(event)}>
           <div className="starters">

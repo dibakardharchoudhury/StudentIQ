@@ -53,6 +53,15 @@ describe('learning state', () => {
       sessionId: 'server-session-id', subject: 'maths', language: 'en', message: 'Question two', mood: 'gentle',
     });
   });
+  it('scrolls new replies within the conversation rather than scrolling the page', async () => {
+    await setup(vi.fn().mockResolvedValue({ sessionId: 'server-session-id', reply: 'A new reply' }));
+    const region = screen.getByRole('region', { name: 'Conversation' });
+    Object.defineProperty(region, 'scrollHeight', { configurable: true, value: 500 });
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'A question' } });
+    fireEvent.click(screen.getByRole('button', { name: /Send question/ }));
+    await screen.findByText('A new reply');
+    await waitFor(() => expect(region.scrollTop).toBe(500));
+  });
   it('does not fabricate grades: progress is derived only from returned sessions', async () => {
     await setup(vi.fn());
     fireEvent.click(screen.getByRole('button', { name: /Progress/ }));

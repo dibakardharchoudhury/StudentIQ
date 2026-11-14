@@ -3,6 +3,9 @@
 StudentIQ is a parent-controlled learning assistant for children. The web app
 uses a 3D character and Azure Speech; a separate API uses Microsoft Foundry
 Model Router and stores learning records in Azure Blob Storage.
+The locally rendered, stylized human tutor changes outfit colour with the saved
+appearance preset and has simple speaking and idle animation. It is not a real
+person, uses no camera, and has a static illustrated fallback without WebGL.
 
 The tutor is AI, can make mistakes, and does not replace a teacher or parent.
 Generated quiz answers and explanations should be checked when important.

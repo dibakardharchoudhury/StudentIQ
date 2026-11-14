@@ -62,7 +62,7 @@ describe('backend-synchronized teacher customization', () => {
     render(<TeacherSettings api={api as unknown as Api} language="en" online disabled={false} onChange={changed} onBusyChange={vi.fn()} />);
     await waitFor(() => expect(changed).toHaveBeenCalledWith(initial));
     fireEvent.click(screen.getByText('Make your teacher feel like yours'));
-    fireEvent.change(screen.getByLabelText('Teacher appearance'), { target: { value: 'mint' } });
+    fireEvent.change(screen.getByLabelText('Teacher outfit colour'), { target: { value: 'mint' } });
     fireEvent.change(screen.getByLabelText('Teacher voice'), { target: { value: 'alternate' } });
     fireEvent.change(screen.getByLabelText('Teacher mood'), { target: { value: 'calm' } });
     expect(changed).toHaveBeenCalledTimes(1);
