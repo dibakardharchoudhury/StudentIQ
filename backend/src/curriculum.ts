@@ -47,6 +47,26 @@ const topics: Record<string, LearningTopic[]> = {
     { id: "rhythm", en: "Rhythm", nb: "Rytme", guidance: "Explore basic beats and simple rhythm patterns." },
     { id: "keys", en: "Keyboard patterns", nb: "Mønstre på tangentene", guidance: "Explore the pattern of piano keys using clear text labels." }
   ],
+  Coding: [
+    { id: "instructions", en: "Robot instructions", nb: "Robotinstruksjoner", guidance: "Explore bounded ordered instructions, loops and conditions using simple text; never ask a child to execute arbitrary code." },
+    { id: "debugging", en: "Find the mix-up", nb: "Finn forvekslingen", guidance: "Explore tracing a short sequence and correcting a clearly described mistake." }
+  ],
+  Space: [
+    { id: "orbits", en: "Our solar system", nb: "Solsystemet vårt", guidance: "Explore established facts about planets, the Sun and the Moon. Do not claim current discoveries or use inaccurate scaled diagrams." },
+    { id: "space-light", en: "Light and gravity", nb: "Lys og tyngdekraft", guidance: "Explore a simple, accurate distinction between reflected light, stars and gravitational attraction." }
+  ],
+  Nature: [
+    { id: "habitats", en: "Animal homes", nb: "Dyrenes hjem", guidance: "Explore a well-established habitat or adaptation without invented animal facts." },
+    { id: "nature-connections", en: "Nature's connections", nb: "Sammenhenger i naturen", guidance: "Explore basic food chains, pollination or nutrient recycling." }
+  ],
+  Art: [
+    { id: "visual-patterns", en: "Shapes and patterns", nb: "Former og mønstre", guidance: "Explore objective features of shapes, repetition and symmetry; do not grade subjective artistic preferences." },
+    { id: "clear-design", en: "Make an idea clear", nb: "Gjør en idé tydelig", guidance: "Explore simple design purpose, readable contrast or identifying shading; do not judge artistic ability." }
+  ],
+  "Media literacy": [
+    { id: "source-checking", en: "Check a source", nb: "Sjekk en kilde", guidance: "Explore checking dates, context and independent evidence. Never fabricate live headlines or current events." },
+    { id: "fact-opinion", en: "Facts and opinions", nb: "Fakta og meninger", guidance: "Explore a clear factual claim versus a personal preference without political persuasion or collecting personal information." }
+  ],
   "Music theory": [
     { id: "notes", en: "Note names", nb: "Notenavn", guidance: "Explore basic note names." },
     { id: "rhythm", en: "Rhythm", nb: "Rytme", guidance: "Explore simple rhythm and beats." }

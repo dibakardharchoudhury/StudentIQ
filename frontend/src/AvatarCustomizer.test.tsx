@@ -5,18 +5,27 @@ import { applyAvatarPrompt, defaultAvatar } from './avatar-style';
 
 it('applies combined English and Norwegian prompts without changing unrelated features', () => {
   const blue = applyAvatarPrompt('Please give my teacher short blue hair and a purple shirt with glasses', defaultAvatar);
-  expect(blue).toEqual({ hair: 'blue', hairLength: 'short', shirt: 'purple', glasses: true });
+  expect(blue).toEqual({ ...defaultAvatar, hair: 'blue', hairLength: 'short', shirt: 'purple', glasses: true });
   expect(applyAvatarPrompt('grønn genser og uten briller', blue)).toEqual({ ...blue, shirt: 'green', glasses: false });
   expect(applyAvatarPrompt('rosa genser, kort blått hår og briller', defaultAvatar))
-    .toEqual({ hair: 'blue', hairLength: 'short', shirt: 'pink', glasses: true });
+    .toEqual({ ...defaultAvatar, hair: 'blue', hairLength: 'short', shirt: 'pink', glasses: true });
   expect(applyAvatarPrompt('nullstill', blue)).toEqual(defaultAvatar);
 });
 
 it('rejects unsupported parts and contradictory choices instead of partially applying them', () => {
-  for (const prompt of ['dragon wings', 'blue shirt and dragon wings', 'red shirt and blue shirt', 'glasses and no glasses', 'blue shirt ' + 'x'.repeat(180)]) {
+  const before = { ...defaultAvatar };
+  for (const prompt of ['dragon wings', 'blue shirt and dragon wings', 'red shirt and blue shirt', 'glasses and no glasses', 'bow and no bow', 'star badge without star badge', 'blue shirt ' + 'x'.repeat(180)]) {
     expect(() => applyAvatarPrompt(prompt, defaultAvatar)).toThrow();
   }
-  expect(defaultAvatar).toEqual({ shirt: 'theme', hair: 'brown', hairLength: 'long', glasses: false });
+  expect(defaultAvatar).toEqual(before);
+});
+
+it('adds and removes playful accessories in both languages without overriding colours', () => {
+  const style = applyAvatarPrompt('purple hair, blue shirt and a bow without a star badge', defaultAvatar);
+  expect(style).toEqual({ ...defaultAvatar, hair: 'purple', shirt: 'blue', bow: true, badge: false });
+  expect(applyAvatarPrompt('uten sløyfe og stjernemerke', style)).toEqual({ ...style, bow: false, badge: true });
+  expect(applyAvatarPrompt('uten en sløyfe og uten et stjernemerke', style)).toEqual({ ...style, bow: false, badge: false });
+  expect(applyAvatarPrompt('without the glasses', { ...style, glasses: true })).toEqual(style);
 });
 
 it('lets a child preview a prompt immediately, reports unsupported requests, and restores the default', async () => {

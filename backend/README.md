@@ -2,8 +2,9 @@
 
 Node.js 20+ / TypeScript Azure Functions v4 API. HTTP triggers use Functions'
 `anonymous` trigger level so the app can validate Entra access tokens itself;
-this is **not** anonymous application access. Every route other than
-`GET /api/health` requires a cryptographically verified v2 Entra JWT.
+this is **not** anonymous learning access. Learning routes require a verified
+v2 Entra access token or an approved, revocable social session. The health and
+signature-verified social exchange boundaries are described below.
 
 ## Configuration
 
@@ -89,7 +90,7 @@ and students receive 403 on all admin routes.
 `GOOGLE_CLIENT_ID` and/or `MICROSOFT_PERSONAL_CLIENT_ID` must match the respective
 frontend public client IDs. Google uses a Google Cloud OAuth web client, not an
 Azure registration. By owner choice, StudentIQ shares OPB's public Google
-client ID and consent branding. This does not share OPB's sessions, signing
+client ID and neutral **Shared Apps** consent branding. This does not share OPB's sessions, signing
 secrets or account permissions: StudentIQ still verifies each assertion and
 requires its own provider-subject approval. Neither flow needs a client secret
 in the browser. Google Calendar access requires its own API setup and consent.
@@ -128,6 +129,11 @@ removable social-directory entry.
 * `POST /api/social/session`, `POST /api/social/logout` — personal-account exchange and revocation, described above.
 * `GET /api/access/accounts`, `POST /api/access/accounts`, `DELETE /api/access/accounts/{id}` — administrator-only access management.
 * `GET /api/preferences` and `PUT /api/preferences` — the preferences object described below.
+* `GET /api/library?language=en|nb` — authenticated, bounded version-1 catalog of 138 authored questions, without keys, clues or explanations. Only one valid language query parameter is accepted.
+* `POST /api/library/questions/{id}` — accepts exactly `{language: "en"|"nb"}` and issues the selected authored question with `source: "library"`, `libraryId` and task `level`. An explicit repeat is allowed, using a new quiz ID and the existing private quiz storage/grading mechanism.
+* `GET /api/quiz/{id}/hint` — the stored reasoning clue for an issued library question; family authorization is enforced. No model is invoked.
+* `GET /api/quiz/{id}` — `{id, answer: null}` before a recorded answer, or `{id, answer: {answerIndex, correct, correctIndex, explanation}}` afterward. Used to reconcile lost submission responses, not to reveal an unsubmitted answer key.
+
 * `GET /api/planning/reminders`, `POST /api/planning/reminders`, `DELETE /api/planning/reminders/{id}` — admin-only manual planning. The `admin` route prefix is reserved by Azure Functions.
 * `POST /api/practice/piano` and `GET /api/practice/piano` — recorded note-identification practice.
 * `POST /api/quiz`, `POST /api/quiz/{id}/answer`, `GET /api/quiz/attempts` — evidence-based MCQ practice.
@@ -146,6 +152,22 @@ removable social-directory entry.
 All routes except health, the signature-verified provider exchange, and browser
 CORS preflight require authenticated family access. The exact configured origin is allowed GET/POST/PUT/DELETE;
 platform CORS must use the same origin. Responses use `Cache-Control: no-store`.
+
+### Authored question library
+
+Library source content is in [question-bank-data.ts](src/question-bank-data.ts),
+with bounded numerical visuals and catalog selection in
+[question-bank.ts](src/question-bank.ts). There are 48 Maths practice items and
+six-item samplers for the other fifteen subjects, including four interest-led
+worlds and media literacy rather than invented current news. Paired translations
+count once; numerical variants do not represent separate learning concepts.
+These are original authored practice items, not independently certified lessons.
+Bank browsing, issuance, hints, review and grading do not invoke the model,
+load conversation context or consume model quota. Storage operations still have
+infrastructure costs. Library issuance does not modify AI anti-repetition memory.
+Answer submission remains immutable and idempotent for the same quiz ID/choice;
+a different choice for an already answered quiz remains a conflict. Deploy these
+routes before the frontend release; existing AI issuance clients remain compatible.
 
 ### Shared preferences and teaching tone
 

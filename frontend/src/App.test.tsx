@@ -40,6 +40,9 @@ describe('learning state', () => {
     const api = {
       preferences: vi.fn().mockResolvedValue({ appearance: 'rose', voice: 'default', mood: 'gentle' }),
       quiz: vi.fn().mockResolvedValue({ id: 'm1', question: 'Count the stars?', options: ['1', '2', '3', '4'] }),
+      library: vi.fn().mockResolvedValue([{ id: 'maths-fixture', subject: 'Maths', level: 1, goal: 'A library goal', question: 'A library preview?' }]),
+      libraryQuiz: vi.fn().mockResolvedValue({ id: 'l1', source: 'library', libraryId: 'maths-fixture', level: 1,
+        question: 'A library question?', options: ['One', 'Two', 'Three', 'Four'] }),
     };
     render(<Workspace api={api as unknown as Api} initialSessions={[]} language="en" setLanguage={vi.fn()} online />);
     const start = screen.getByRole('button', { name: /Make me a mission/ });
@@ -55,7 +58,20 @@ describe('learning state', () => {
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Talk to teacher' }));
     expect(screen.getByRole('textbox')).toHaveValue('I wonder why');
+    fireEvent.click(screen.getByRole('button', { name: 'Question library' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Open question:/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Start this question/ }));
+    await screen.findByText('A library question?');
+    fireEvent.click(screen.getByRole('radio', { name: 'Three' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mission' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Mission' }));
+    expect(screen.getByRole('radio', { name: '2' })).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Question library' }));
+    expect(screen.getByRole('radio', { name: 'Three' })).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Talk to teacher' }));
+    expect(screen.getByRole('textbox')).toHaveValue('I wonder why');
     expect(api.quiz).toHaveBeenCalledOnce();
+    expect(api.libraryQuiz).toHaveBeenCalledOnce();
   });
   it('starts and stops speaking with taps, then lets the learner review before sending', async () => {
     speechState.listen.mockReset(); speechState.stop.mockReset();

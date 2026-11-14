@@ -7,8 +7,9 @@ const read = file => readFileSync(new URL(file, root), 'utf8');
 const manifest = JSON.parse(read('manifest.webmanifest'));
 const base = manifest.scope;
 const release = JSON.parse(read('version.json'));
-assert.ok(release.version.startsWith('1.0.0-'));
+const packageVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 assert.ok(Number.isFinite(Date.parse(release.builtAt)));
+assert.equal(release.version, `${packageVersion}-${release.builtAt.replace(/[-:.]/g, '')}`);
 assert.equal(manifest.start_url, base);
 assert.ok(read('index.html').includes(`${base}manifest.webmanifest`));
 assert.ok(read('index.html').includes(`${base}assets/`));
@@ -78,6 +79,7 @@ for (const path of [
   `${base}config.json`, `${base}version.json`, `${base}auth.html`, `${base}api/sessions`, '/api/sessions', `${base}?code=private`,
   '/api/me', '/api/planning/reminders', '/api/preferences', '/api/practice/piano', '/api/quiz/attempts',
   '/api/sessions?cursor=private', '/api/practice/piano?cursor=private', '/api/quiz/attempts?cursor=private',
+  '/api/library?language=en', '/api/library/questions/maths-books', '/api/quiz/private', '/api/quiz/private/hint',
 ]) {
   assert.equal(intercept(path), undefined, `Must bypass worker: ${path}`);
 }

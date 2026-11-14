@@ -30,7 +30,26 @@ export interface QuizRecord extends GeneratedQuiz, QuizInput {
   fingerprint: string;
   createdAt: string;
   topicId?: string;
+  library?: LibraryQuizMetadata;
   answer?: { answerIndex: number; correct: boolean; at: string };
+}
+
+export interface LibraryQuizMetadata {
+  id: string;
+  level: 1 | 2 | 3;
+  hint: string;
+}
+
+export interface QuizQuestion {
+  id: string;
+  question: string;
+  options: GeneratedQuiz["options"];
+  visual?: QuizVisual;
+  lesson?: string;
+  topic?: string;
+  source?: "library";
+  libraryId?: string;
+  level?: 1 | 2 | 3;
 }
 
 interface QuizMemory {
@@ -55,7 +74,10 @@ const SUBJECTS: Record<string, string> = {
   english: "English", engelsk: "English",
   piano: "Piano", "music theory": "Music theory", musikkteori: "Music theory",
   french: "French", fransk: "French", spanish: "Spanish", spansk: "Spanish",
-  german: "German", tysk: "German"
+  german: "German", tysk: "German",
+  coding: "Coding", programmering: "Coding", space: "Space", verdensrommet: "Space",
+  nature: "Nature", natur: "Nature", art: "Art", kunst: "Art",
+  "media literacy": "Media literacy", kildekritikk: "Media literacy"
 };
 const MAX_RECENT = 24;
 const MAX_WRITE_ATTEMPTS = 8;
@@ -200,9 +222,7 @@ export class QuizRepository {
     return (await this.recent(parentOid, input)).questions;
   }
 
-  async create(parentOid: string, input: QuizInput, generated: GeneratedQuiz, topic?: LearningTopic): Promise<{
-    id: string; question: string; options: GeneratedQuiz["options"]; visual?: QuizVisual; lesson?: string; topic?: string;
-  }> {
+  async create(parentOid: string, input: QuizInput, generated: GeneratedQuiz, topic?: LearningTopic): Promise<QuizQuestion> {
     input = validateQuizInput(input);
     generated = validateGeneratedQuiz(generated);
     const fingerprint = quizFingerprint(generated.question);
@@ -225,14 +245,48 @@ export class QuizRepository {
       if (confirmed) break;
     }
     if (!confirmed) throw new Error("Quiz memory write could not be confirmed.");
+    return this.persist(parentOid, input, generated, topic);
+  }
+
+  // Authored practice deliberately allows repeats without altering AI rotation memory.
+  async createLibrary(parentOid: string, input: QuizInput, generated: GeneratedQuiz, library: LibraryQuizMetadata): Promise<QuizQuestion> {
+    input = validateQuizInput(input);
+    generated = validateGeneratedQuiz(generated);
+    validateLibraryMetadata(library);
+    return this.persist(parentOid, input, generated, undefined, library);
+  }
+
+  private async persist(parentOid: string, input: QuizInput, generated: GeneratedQuiz,
+    topic?: LearningTopic, library?: LibraryQuizMetadata): Promise<QuizQuestion> {
     const now = new Date();
     const id = `${now.getTime()}-${randomUUID()}`;
-    const record: QuizRecord = { ...input, ...generated, fingerprint, id, createdAt: now.toISOString(), ...(topic ? { topicId: topic.id } : {}) };
+    const record: QuizRecord = { ...input, ...generated, fingerprint: quizFingerprint(generated.question),
+      id, createdAt: now.toISOString(), ...(topic ? { topicId: topic.id } : {}),
+      ...(library ? { library: { ...library } } : {}) };
     if (!await this.blobs.create(`${this.prefix(parentOid)}${id}.json`, record)) {
       throw new Error("Quiz write could not be confirmed.");
     }
     return { id, question: record.question, options: [...record.options], ...(record.visual ? { visual: record.visual } : {}),
-      ...(record.lesson ? { lesson: record.lesson } : {}), ...(topic ? { topic: topicLabel(topic, input.language) } : {}) };
+      ...(record.lesson ? { lesson: record.lesson } : {}), ...(topic ? { topic: topicLabel(topic, input.language) } : {}),
+      ...(library ? { source: "library", libraryId: library.id, level: library.level } : {}) };
+  }
+
+  async state(parentOid: string, id: string) {
+    const stored = await this.blobs.read<unknown>(`${this.prefix(parentOid)}${validateQuizId(id)}.json`);
+    if (!stored) throw new QuizNotFoundError();
+    const quiz = validateRecord(stored.value);
+    return { id: quiz.id, answer: quiz.answer ? {
+      answerIndex: quiz.answer.answerIndex, correct: quiz.answer.correct,
+      correctIndex: quiz.correctIndex, explanation: quiz.explanation
+    } : null };
+  }
+
+  async hint(parentOid: string, id: string): Promise<{ hint: string }> {
+    const stored = await this.blobs.read<unknown>(`${this.prefix(parentOid)}${validateQuizId(id)}.json`);
+    if (!stored) throw new QuizNotFoundError();
+    const quiz = validateRecord(stored.value);
+    if (!quiz.library) throw new QuizNotFoundError();
+    return { hint: quiz.library.hint };
   }
 
   async answer(parentOid: string, id: string, answerIndex: number): Promise<{
@@ -300,6 +354,7 @@ function validateRecord(value: unknown): QuizRecord {
       ...(quiz.visual === undefined ? {} : { visual: quiz.visual })
     });
     validateQuizId(quiz.id);
+    if (quiz.library !== undefined) validateLibraryMetadata(quiz.library);
     if ((quiz.topicId !== undefined && (typeof quiz.topicId !== "string" || !/^[a-z0-9-]{1,60}$/.test(quiz.topicId))) ||
         quiz.fingerprint !== quizFingerprint(quiz.question) ||
         typeof quiz.createdAt !== "string" || !Number.isFinite(Date.parse(quiz.createdAt))) throw new Error();
@@ -313,4 +368,13 @@ function validateRecord(value: unknown): QuizRecord {
     throw new Error("Invalid quiz storage.");
   }
   return quiz;
+}
+
+function validateLibraryMetadata(value: LibraryQuizMetadata): void {
+  if (!value || typeof value !== "object" || Array.isArray(value) ||
+      Object.keys(value).some(key => !["id", "level", "hint"].includes(key)) ||
+      typeof value.id !== "string" || !/^[a-z0-9-]{1,60}$/.test(value.id) ||
+      ![1, 2, 3].includes(value.level) || !plainString(value.hint, 320)) {
+    throw new Error("Invalid library question metadata.");
+  }
 }

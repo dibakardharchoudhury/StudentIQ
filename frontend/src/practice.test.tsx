@@ -48,6 +48,43 @@ describe('optional piano practice', () => {
 });
 
 describe('low-pressure backend quiz', () => {
+  it('lets a learner stop waiting for a save and reconciles the stored answer without another submission', async () => {
+    const api = {
+      quiz: vi.fn().mockResolvedValue({ id: 'quiz', question: 'A fixture?', options: ['A', 'B', 'C', 'D'] }),
+      answerQuiz: vi.fn().mockImplementation(() => new Promise(() => {})),
+      quizAttempts: vi.fn().mockResolvedValue([{ id: 'quiz', correct: true }]),
+      quizState: vi.fn().mockResolvedValue({ id: 'quiz', answer: {
+        answerIndex: 0, correct: true, correctIndex: 0, explanation: 'Confirmed after waiting stopped.',
+      } }),
+    };
+    render(<Quiz api={api as unknown as Api} subject="maths" language="en" online disabled={false} onBusyChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Make me a mission/ }));
+    await screen.findByText('A fixture?');
+    fireEvent.click(screen.getByRole('radio', { name: 'A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Check my choice' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop waiting' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('answer may have been stored');
+    expect(screen.getByRole('button', { name: 'Check my choice' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh practice records' }));
+    expect(await screen.findByText('Confirmed after waiting stopped.')).toBeInTheDocument();
+    expect(api.answerQuiz).toHaveBeenCalledOnce();
+  });
+  it('keeps a confirmed grade usable when only the subsequent history refresh fails', async () => {
+    const api = {
+      quiz: vi.fn().mockResolvedValue({ id: 'quiz', question: 'A fixture?', options: ['A', 'B', 'C', 'D'] }),
+      answerQuiz: vi.fn().mockResolvedValue({ correct: true, correctIndex: 0, explanation: 'A durable answer.' }),
+      quizAttempts: vi.fn().mockRejectedValue(new Error('History is unavailable')),
+    };
+    render(<Quiz api={api as unknown as Api} subject="maths" language="en" online disabled={false} onBusyChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Make me a mission/ }));
+    await screen.findByText('A fixture?');
+    fireEvent.click(screen.getByRole('radio', { name: 'A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Check my choice' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('History is unavailable');
+    expect(screen.getByText('A durable answer.')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).not.toHaveTextContent('answer may have been stored');
+    expect(screen.getByRole('button', { name: /Make another mission/ })).toBeEnabled();
+  });
   it('requests a question only on demand and uses persisted attempts for practice records', async () => {
     const api = {
       quiz: vi.fn().mockResolvedValue({ id: 'backend-quiz-id', topic: 'Maps and places', lesson: 'A map can help us describe a place.', question: 'Test fixture question?', options: ['First choice', 'Second choice', 'Third choice', 'Fourth choice'],
@@ -151,6 +188,7 @@ describe('low-pressure backend quiz', () => {
       quiz: vi.fn().mockResolvedValue({ id: 'quiz', question: 'A fixture?', options: ['A', 'B', 'C', 'D'] }),
       answerQuiz: vi.fn().mockRejectedValue(new Error('Connection lost')),
       quizAttempts: vi.fn().mockResolvedValue([]),
+      quizState: vi.fn().mockResolvedValue({ id: 'quiz', answer: null }),
     };
     render(<Quiz api={api as unknown as Api} subject="maths" language="en" online disabled={false} onBusyChange={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /Make me a mission/ }));
@@ -161,7 +199,30 @@ describe('low-pressure backend quiz', () => {
     expect(screen.getByRole('button', { name: 'Check my choice' })).toBeDisabled();
     expect(screen.getByRole('button', { name: /Make another mission/ })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Refresh practice records' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: /Make me a mission/ })).toBeEnabled());
-    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Check my choice' })).toBeEnabled());
+    expect(screen.getByRole('radio', { name: 'A' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'A' })).toBeDisabled();
+    expect(screen.getByText(/Your choice is still here/)).toBeInTheDocument();
+  });
+  it('restores the authoritative answer after a lost submission response without grading again', async () => {
+    const api = {
+      quiz: vi.fn().mockResolvedValue({ id: 'quiz', question: 'A fixture?', options: ['A', 'B', 'C', 'D'] }),
+      answerQuiz: vi.fn().mockRejectedValue(new Error('Response lost')),
+      quizAttempts: vi.fn().mockResolvedValue([{ id: 'quiz', correct: false }]),
+      quizState: vi.fn().mockResolvedValue({ id: 'quiz', answer: {
+        answerIndex: 0, correct: false, correctIndex: 2, explanation: 'A confirmed stored explanation.',
+      } }),
+    };
+    render(<Quiz api={api as unknown as Api} subject="maths" language="en" online disabled={false} onBusyChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Make me a mission/ }));
+    await screen.findByText('A fixture?');
+    fireEvent.click(screen.getByRole('radio', { name: 'A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Check my choice' }));
+    await screen.findByRole('alert');
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh practice records' }));
+    expect(await screen.findByText('A confirmed stored explanation.')).toBeInTheDocument();
+    expect(screen.getByText(/Your stored answer was confirmed/)).toBeInTheDocument();
+    expect(api.answerQuiz).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: /Make another mission/ })).toBeEnabled();
   });
 });

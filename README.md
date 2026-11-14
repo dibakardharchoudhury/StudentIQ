@@ -26,14 +26,21 @@ gaze. Learning scores are based on recorded practice, not attention.
 
 ## Learning activities
 
-Learning has separate **Mission**, **Talk to teacher**, and **Explore & play**
+Learning has separate **Question library**, **Mission**, **Talk to teacher**, and **Explore & play**
 spaces, with one activity visible at a time. Switching spaces preserves the
 current mission and unsent question. A compact tutor panel on phones keeps the
 activity within reach. Light violet and midnight themes are available from the
 header; the theme choice is kept in the page URL, not personal-data storage.
 Learners can explore multiplication with a dot array, build English or
 Norwegian sentences, and select stages of the water cycle. The existing
-fraction explorer and piano remain available. These local explorers use no
+fraction explorer and piano remain available. **Coding & logic**, **Space explorers**,
+**Animals & nature**, and **Art & design** add interest-led worlds, with authored
+practice and optional AI conversation/missions. Coding includes a local 5×5 robot
+board: build up to twelve arrow commands, trace a route, edit mistakes and reset.
+It stops explicitly before an out-of-bounds move, never executes submitted code
+and is labelled exploration—not a saved grade. Nature also uses the water-cycle
+explorer. The optional **tiny silly break** shows original local jokes only when
+chosen; it makes no AI or Speech request. These local explorers use no
 additional model calls and do not save attempts or award grades. Their teacher
 buttons only add a question
 to the draft; the learner reviews and sends it explicitly. Conversation,
@@ -42,13 +49,61 @@ Changing subjects or language, starting a new session, or opening an old one
 asks before clearing an unsent question.
 
 **Design your learning companion** changes the teacher immediately from a short
-English or Bokmål prompt, for example `blue shirt, short hair and glasses`.
-Hair and shirt colours, hair length and glasses are supported in both the 3D
+English or Bokmål prompt, for example `purple hair, blue shirt and a bow`.
+Hair and shirt colours, hair length, glasses, a hair bow and a decorative star
+badge are supported in both the 3D
 avatar and its illustrated fallback. Unsupported requests or conflicting
 choices are reported without partially changing the avatar. This is local,
 bounded styling, not AI image generation: prompts are not sent to a provider or
 saved. Changes survive activity switching in this tab, but reset on page reload;
 saved appearance, voice and mood preferences remain separate.
+The clothing badge is decoration, not an earned reward. The tutor has a cleaner
+outfit without the large front patch, softer eyes and a small nose; hands stay
+relaxed. Rendering pauses offscreen and in hidden tabs. Reduced motion uses
+event-driven still frames instead of a continuous animation loop; speech and
+theme changes still update the portrait.
+Production-mode browser checks observed 31 scheduled frames in 500 ms with the
+3D portrait visible, and zero when offscreen or with reduced motion enabled.
+
+### Authored question library
+
+The library contains **138 practice items in 16 subjects**, with paired English
+and Bokmål versions counted once. **48 Maths items** combine twenty visual
+arrays/fractions/number-line examples with twenty-eight varied reasoning and
+transfer problems: arithmetic, place value, measurement, time, shapes, area,
+decimals, equivalent fractions, change, estimates and multi-step stories.
+Each other subject has a six-question **starter sampler**: Norsk, Science,
+Geography, History, English, Piano, Music theory, French, Spanish, German,
+Coding, Space, Nature, Art and Media literacy. Media literacy supports
+source/date/context checking; it does not fabricate current headlines.
+
+Browse by subject, task challenge or local text search. At most twelve cards
+render per page, and the initial view mixes subjects instead of displaying only
+arithmetic variants. Every item names a learning goal and has an authored
+reasoning clue and explanation. Answer keys remain server-side during play.
+Starting a question is explicit; only submitted answers are graded and saved.
+Intentional repeats create separate practice questions without changing AI
+mission rotation. Browsing, issuance, clues and grading make **no model or model
+quota calls**; storage, hosting and separately requested voice can still cost money.
+In a local production-mode Chrome check at a 320 px viewport with 6x CPU
+throttling, ten loaded-catalog filter changes updated the results within 55 ms
+(worst sample), with no API requests. This is a lab measurement, not a guarantee
+for every phone or a measurement of initial loading.
+
+Sources are maintained in [the question-bank module](backend/src/question-bank.ts)
+and [the original authored content](backend/src/question-bank-data.ts).
+This is open-source learning practice, not a secure exam or independently
+teacher/language-reviewer-certified curriculum. Translation consistency, answer
+shapes and numerical visuals are tested, but classroom and fluent-language review
+are still valuable. Counts and difficulty labels do not prove mastery or learning gains.
+Loaded catalog data stays only in tab memory; practice still needs a connection.
+Catalog requests stop waiting after thirty seconds with an explicit retry.
+**Stop waiting** cancels a slow quiz request without claiming the server stopped.
+If an answer response is lost, the choice remains and further submissions are
+blocked until the stored result is checked. A confirmed result restores the
+actual recorded choice and explanation; otherwise only the same choice can be
+retried safely against the same quiz ID. Reload/sign-out still clears unsaved
+tab state, not saved server history.
 
 ### Family access and calendars
 
@@ -69,16 +124,18 @@ The existing Microsoft registrations declare delegated `Calendars.Read.Shared`
 for work/school and `Calendars.ReadBasic` for personal accounts; no application
 permissions or tenant-wide administrator consent are granted. A mailbox and
 account-level consent are still required when connecting.
-Google sign-in uses the owner-approved shared OPB Google OAuth web client.
+Google sign-in uses the owner-approved shared Google OAuth web client.
 Both apps use the same GitHub Pages origin, so they share Google's consent
 branding and any provider account restrictions. StudentIQ's account approvals
 remain independent: an OPB account is not automatically approved here.
+Its Google consent application name is the neutral **Shared Apps**; the opaque
+client ID and both applications' authorization rules are unchanged.
 Google Calendar still requires enabling the Calendar API in that Google Cloud
 project and separate read-only consent; sign-in does not grant calendar access.
 
 ### Published version and updates
 
-The footer displays the release version (for example, **1.0.0**) and a separate
+The footer displays the release version (for example, **1.1.0**) and a separate
 build timestamp in **Europe/Oslo** (Norwegian local time, including daylight-saving
 time). The unique timestamped build ID stays internal for update detection, so
 rebuilds of the same release are still detected. Public `version.json`

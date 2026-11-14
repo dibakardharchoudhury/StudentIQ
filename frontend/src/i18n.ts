@@ -1,6 +1,40 @@
 import type { Language } from './api';
 
 const en = {
+  libraryMode: 'Question library', libraryTitle: 'A library of little discoveries',
+  libraryIntro: 'Pick a question, look for clues, and explore the explanation. No AI generation needed.',
+  libraryAbout: 'About these questions', libraryScope: 'Original StudentIQ practice questions in English and Bokmål, including varied number examples. Starter samplers, not a complete or certified curriculum. Answers and wording can still need correction; check surprising facts with a grown-up. Difficulty is about the task, not your age or ability.',
+  librarySearch: 'Find a question or topic', librarySubject: 'Library subject', libraryLevel: 'Choose a challenge',
+  libraryAll: 'All subjects', libraryAllLevels: 'Any challenge', libraryLevel1: 'Warm up',
+  libraryLevel2: 'Think it through', libraryLevel3: 'A little stretch',
+  libraryLevelGuide: 'Warm up: recognize or count. Think it through: connect clues. A little stretch: compare or explain.',
+  libraryMatches: 'matching questions', libraryOf: 'of', libraryPage: 'Page', libraryPrevious: 'Previous page',
+  libraryNext: 'Next page', libraryOpen: 'Open question', libraryBack: 'Back to the library',
+  libraryEmpty: 'No matches. Try a shorter search or a different filter.', libraryLoading: 'Opening the question library…',
+  libraryFailed: 'The question library could not be loaded.', libraryRetry: 'Reload the library',
+  libraryTimeout: 'The library took too long to respond. Waiting stopped; you can retry.',
+  libraryStale: 'Showing the last fully loaded library. The refresh failed.',
+  libraryOffline: 'Loaded questions can still be browsed. Starting practice and saving answers need a connection.',
+  libraryPractice: 'A ready-made question for you', libraryStart: 'Start this question',
+  librarySafety: 'Authored practice · no AI generation', libraryGoal: 'Learning goal',
+  libraryTryAgain: 'Try this question again', libraryHint: 'Show a reasoning clue',
+  libraryHintLoading: 'Loading your clue…', libraryHintTitle: 'A clue, not the answer',
+  libraryExplore: 'This world has questions ready in the library. Choose one to explore.',
+  quizRecovered: 'Your stored answer was confirmed and restored by the service.',
+  quizStopWaiting: 'Stop waiting', quizCancelled: 'Waiting stopped. The request may still have reached the service.',
+  quizRetrySame: 'No stored answer was confirmed yet. Your choice is still here. You can retry this same choice safely.',
+  coding: 'Coding & logic', space: 'Space explorers', nature: 'Animals & nature', art: 'Art & design',
+  musicTheory: 'Music theory', french: 'French', spanish: 'Spanish', german: 'German', mediaLiteracy: 'Media & fact-checking',
+  robotTitle: 'Code a tiny robot', robotIntro: 'Build a route to the flag. Each arrow moves one square; up goes toward row 1.',
+  robotNote: 'Local exploration—not saved or graded. No AI calls or executable code.',
+  robotUp: 'Up', robotDown: 'Down', robotLeft: 'Left', robotRight: 'Right',
+  robotCommands: 'Your instructions', robotRun: 'Run my route', robotUndo: 'Remove last arrow', robotReset: 'Start over',
+  robotLimit: 'Up to 12 arrows. Remove one to make room.', robotEmpty: 'Add arrows to build your route.',
+  robotSuccess: 'The robot reached the flag. Can you explain your route?',
+  robotStopped: 'This arrow would leave the board. The robot stopped before it.',
+  robotNotYet: 'The route ran. The flag is still ahead—edit your arrows and try again.',
+  robotPosition: 'Robot column', robotRow: 'row', robotFlag: 'Flag: column 5, row 1.', robotStep: 'Step',
+  buddyJoke: 'A tiny silly break', buddyJokeNote: 'A made-up joke, just for fun.',
   tagline: 'Big questions. Bright ideas.', parent: 'A parent-guided learning space',
   welcome: 'Curious minds make great adventures.',
   welcomeBody: 'Meet your learning companion, explore big ideas and find out what happens when you ask “what if?”',
@@ -166,6 +200,40 @@ const en = {
 };
 type Copy = { [K in keyof typeof en]: string };
 const nb: Copy = {
+  libraryMode: 'Spørsmålsbibliotek', libraryTitle: 'Et bibliotek med små oppdagelser',
+  libraryIntro: 'Velg et spørsmål, se etter ledetråder og utforsk forklaringen. Ingen KI-generering nødvendig.',
+  libraryAbout: 'Om spørsmålene', libraryScope: 'Originale StudentIQ-øvingsspørsmål på engelsk og bokmål, med varierte talleksempler. Små smakebiter, ikke en komplett eller sertifisert læreplan. Svar og ordlyd kan fortsatt trenge retting; sjekk overraskende fakta med en voksen. Vanskelighet gjelder oppgaven, ikke alderen eller evnen din.',
+  librarySearch: 'Finn et spørsmål eller tema', librarySubject: 'Fag i biblioteket', libraryLevel: 'Velg en utfordring',
+  libraryAll: 'Alle fag', libraryAllLevels: 'Alle utfordringer', libraryLevel1: 'Varm opp',
+  libraryLevel2: 'Tenk gjennom', libraryLevel3: 'Strekk deg litt',
+  libraryLevelGuide: 'Varm opp: kjenn igjen eller tell. Tenk gjennom: knytt sammen ledetråder. Strekk deg litt: sammenlign eller forklar.',
+  libraryMatches: 'spørsmål som passer', libraryOf: 'av', libraryPage: 'Side', libraryPrevious: 'Forrige side',
+  libraryNext: 'Neste side', libraryOpen: 'Åpne spørsmål', libraryBack: 'Tilbake til biblioteket',
+  libraryEmpty: 'Ingen treff. Prøv et kortere søk eller et annet filter.', libraryLoading: 'Åpner spørsmålsbiblioteket…',
+  libraryFailed: 'Spørsmålsbiblioteket kunne ikke lastes.', libraryRetry: 'Last biblioteket på nytt',
+  libraryTimeout: 'Biblioteket brukte for lang tid på å svare. Ventingen er stoppet; du kan prøve igjen.',
+  libraryStale: 'Viser det sist fullstendig lastede biblioteket. Oppdateringen mislyktes.',
+  libraryOffline: 'Lastede spørsmål kan fortsatt leses. Å starte øving og lagre svar trenger nett.',
+  libraryPractice: 'Et ferdig spørsmål til deg', libraryStart: 'Start dette spørsmålet',
+  librarySafety: 'Skrevet øving · ingen KI-generering', libraryGoal: 'Læringsmål',
+  libraryTryAgain: 'Prøv dette spørsmålet igjen', libraryHint: 'Vis en tenkeledetråd',
+  libraryHintLoading: 'Laster ledetråden…', libraryHintTitle: 'En ledetråd, ikke svaret',
+  libraryExplore: 'Denne verdenen har ferdige spørsmål i biblioteket. Velg ett å utforske.',
+  quizRecovered: 'Det lagrede svaret ditt ble bekreftet og hentet tilbake av tjenesten.',
+  quizStopWaiting: 'Stopp ventingen', quizCancelled: 'Ventingen er stoppet. Forespørselen kan fortsatt ha nådd tjenesten.',
+  quizRetrySame: 'Ingen lagret besvarelse er bekreftet ennå. Valget ditt er fortsatt her. Du kan trygt prøve det samme valget igjen.',
+  coding: 'Koding og logikk', space: 'Utforsk verdensrommet', nature: 'Dyr og natur', art: 'Kunst og design',
+  musicTheory: 'Musikkteori', french: 'Fransk', spanish: 'Spansk', german: 'Tysk', mediaLiteracy: 'Medier og kildekritikk',
+  robotTitle: 'Kod en liten robot', robotIntro: 'Bygg en vei til flagget. Hver pil flytter én rute; opp går mot rad 1.',
+  robotNote: 'Lokal utforsking—ikke lagret eller vurdert. Ingen KI-kall eller kjørbar kode.',
+  robotUp: 'Opp', robotDown: 'Ned', robotLeft: 'Venstre', robotRight: 'Høyre',
+  robotCommands: 'Instruksjonene dine', robotRun: 'Kjør ruten min', robotUndo: 'Fjern siste pil', robotReset: 'Start på nytt',
+  robotLimit: 'Opptil 12 piler. Fjern én for å få plass.', robotEmpty: 'Legg til piler for å bygge en rute.',
+  robotSuccess: 'Roboten nådde flagget. Kan du forklare ruten din?',
+  robotStopped: 'Denne pilen ville gått utenfor brettet. Roboten stoppet før den.',
+  robotNotYet: 'Ruten ble kjørt. Flagget er fortsatt foran—endre pilene og prøv igjen.',
+  robotPosition: 'Robotens kolonne', robotRow: 'rad', robotFlag: 'Flagg: kolonne 5, rad 1.', robotStep: 'Trinn',
+  buddyJoke: 'En liten tullepause', buddyJokeNote: 'En oppdiktet vits, bare for moro skyld.',
   tagline: 'Store spørsmål. Lyse ideer.', parent: 'Et læringsrom med foreldre i førersetet',
   welcome: 'Nysgjerrige hoder skaper eventyr.',
   welcomeBody: 'Møt læringsvennen din, utforsk store ideer og finn ut hva som skjer når du spør «hva om?»',
@@ -330,9 +398,25 @@ const nb: Copy = {
   practiceStale: 'Øvingshistorikken ble ikke fullstendig oppdatert. Eventuelle tidligere fullstendige resultater kan være utdaterte.',
 };
 export const copy = (language: Language): Copy => language === 'nb' ? nb : en;
-export const subjects = ['maths', 'norwegian', 'science', 'currentAffairs', 'english', 'geography', 'history', 'piano', 'otherLanguages'] as const;
+export const subjects = ['maths', 'norwegian', 'science', 'currentAffairs', 'english', 'geography', 'history', 'piano', 'otherLanguages', 'coding', 'space', 'nature', 'art'] as const;
+export function subjectWorld(subject: string): typeof subjects[number] | undefined {
+  const worlds: Record<string, typeof subjects[number]> = {
+    maths: 'maths', math: 'maths', norwegian: 'norwegian', norsk: 'norwegian', science: 'science',
+    currentaffairs: 'currentAffairs', 'media literacy': 'currentAffairs', english: 'english',
+    geography: 'geography', history: 'history', piano: 'piano', 'music theory': 'piano',
+    otherlanguages: 'otherLanguages', french: 'otherLanguages', spanish: 'otherLanguages', german: 'otherLanguages',
+    coding: 'coding', space: 'space', nature: 'nature', art: 'art',
+  };
+  return worlds[subject.trim().toLowerCase()];
+}
 export function subjectLabel(subject: string, language: Language) {
-  if (subject === 'history') return copy(language).historySubject;
-  return subjects.includes(subject as Exclude<typeof subjects[number], 'history'>)
-    ? copy(language)[subject as Exclude<typeof subjects[number], 'history'>] : subject;
+  const c = copy(language);
+  const labels: Record<string, string> = {
+    maths: c.maths, math: c.maths, norsk: c.norwegian, norwegian: c.norwegian, science: c.science,
+    currentaffairs: c.currentAffairs, 'media literacy': c.mediaLiteracy,
+    english: c.english, geography: c.geography, history: c.historySubject, piano: c.piano,
+    'music theory': c.musicTheory, otherlanguages: c.otherLanguages, french: c.french, spanish: c.spanish,
+    german: c.german, coding: c.coding, space: c.space, nature: c.nature, art: c.art,
+  };
+  return labels[subject.trim().toLowerCase()] ?? subject;
 }

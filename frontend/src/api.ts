@@ -64,11 +64,25 @@ const quizVisualSchema = z.discriminatedUnion('kind', [
 ]);
 const quizSchema = z.object({ id, question: z.string().min(1), options: z.array(z.string().min(1)).length(4),
   lesson: z.string().trim().min(1).max(360).optional(), topic: z.string().trim().min(1).max(80).optional(),
-  visual: quizVisualSchema.optional() });
+  visual: quizVisualSchema.optional(), source: z.literal('library').optional(),
+  libraryId: z.string().regex(/^[a-z0-9-]{1,60}$/).optional(),
+  level: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional() });
 const quizAnswerSchema = z.object({
   correct: z.boolean(), correctIndex: z.number().int().min(0).max(3), explanation: z.string(),
 });
 const quizAttemptSchema = z.object({ id, subject: subjectSchema, question: z.string(), correct: z.boolean(), at: timestamp });
+const libraryEntrySchema = z.object({
+  id: z.string().regex(/^[a-z0-9-]{1,60}$/),
+  subject: z.enum(['Maths', 'Norsk', 'Science', 'Geography', 'History', 'English', 'Piano', 'Music theory',
+    'French', 'Spanish', 'German', 'Coding', 'Space', 'Nature', 'Art', 'Media literacy']),
+  level: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  goal: z.string().trim().min(1).max(160), question: z.string().trim().min(1).max(320),
+}).strict();
+const librarySchema = z.object({ version: z.literal(1), questions: z.array(libraryEntrySchema).min(1).max(500) }).strict();
+const quizStateSchema = z.object({
+  id, answer: quizAnswerSchema.extend({ answerIndex: z.number().int().min(0).max(3),
+    explanation: z.string().trim().min(1).max(600) }).strict().nullable(),
+}).strict();
 export type Language = z.infer<typeof languageSchema>;
 export type Session = z.infer<typeof sessionSchema>;
 export type SessionDetail = z.infer<typeof detailSchema>;
@@ -89,6 +103,7 @@ export type Preferences = z.infer<typeof preferencesSchema>;
 export type QuizQuestion = z.infer<typeof quizSchema>;
 export type QuizAnswer = z.infer<typeof quizAnswerSchema>;
 export type QuizAttempt = z.infer<typeof quizAttemptSchema>;
+export type LibraryEntry = z.infer<typeof libraryEntrySchema>;
 
 export class ApiError extends Error {
   constructor(message: string, public readonly status?: number) { super(message); }
@@ -269,6 +284,33 @@ export class Api {
   }
   quiz(subject: string, language: Language, signal?: AbortSignal) {
     return this.request('/api/quiz', quizSchema, signal, { subject, language, supportsNumberLine: true });
+  }
+  async library(language: Language, signal?: AbortSignal): Promise<LibraryEntry[]> {
+    const result = await this.request(`/api/library?${new URLSearchParams({ language })}`, librarySchema, signal);
+    if (new Set(result.questions.map(question => question.id)).size !== result.questions.length) {
+      throw new ApiError('API contract error: the question library contains duplicate IDs.');
+    }
+    return result.questions;
+  }
+  async libraryQuiz(questionId: string, language: Language, signal?: AbortSignal): Promise<QuizQuestion> {
+    if (!/^[a-z0-9-]{1,60}$/.test(questionId)) throw new ApiError('Choose a question from the library.');
+    const result = await this.request(`/api/library/questions/${encodeURIComponent(questionId)}`, quizSchema, signal, { language });
+    if (result.source !== 'library' || result.libraryId !== questionId || result.level === undefined) {
+      throw new ApiError('API contract error: the service returned a different library question.');
+    }
+    return result;
+  }
+  quizHint(quizId: string, signal?: AbortSignal) {
+    return this.request(`/api/quiz/${encodeURIComponent(quizId)}/hint`,
+      z.object({ hint: z.string().trim().min(1).max(320) }).strict(), signal);
+  }
+  async quizState(quizId: string, signal?: AbortSignal) {
+    const result = await this.request(`/api/quiz/${encodeURIComponent(quizId)}`, quizStateSchema, signal);
+    if (result.id !== quizId || (result.answer && result.answer.correct !==
+        (result.answer.answerIndex === result.answer.correctIndex))) {
+      throw new ApiError('API contract error: the stored quiz result is inconsistent.');
+    }
+    return result;
   }
   async answerQuiz(quizId: string, answerIndex: number, signal?: AbortSignal): Promise<QuizAnswer> {
     if (!quizId || !Number.isInteger(answerIndex) || answerIndex < 0 || answerIndex > 3) {

@@ -13,8 +13,9 @@ export default function Teacher({ speaking, label, appearance = 'rose', mood = '
 }) {
   const host = useRef<HTMLDivElement>(null);
   const talking = useRef(speaking);
+  const redraw = useRef<(() => void) | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'unavailable'>('loading');
-  useEffect(() => { talking.current = speaking; }, [speaking]);
+  useEffect(() => { talking.current = speaking; redraw.current?.(); }, [speaking]);
 
   useEffect(() => {
     let disposed = false;
@@ -56,9 +57,11 @@ export default function Teacher({ speaking, label, appearance = 'rose', mood = '
       const collar = own(new THREE.MeshStandardMaterial({ color: portrait.white, roughness: .9 }));
       const eyeWhite = own(new THREE.MeshBasicMaterial({ color: portrait.white }));
       const ink = own(new THREE.MeshBasicMaterial({ color: portrait.ink }));
+      const badgeColor = own(new THREE.MeshBasicMaterial());
       const updateColors = () => {
         clothing.color.set(customization.shirt === 'theme' ? color(outfit[appearance]) || portrait.blush : avatarColors[customization.shirt]);
         clothing.color.lerp(new THREE.Color(portrait.white), .18);
+        badgeColor.color.set(color('--cp-warning') || portrait.white);
       };
       updateColors();
       const light = new THREE.HemisphereLight(portrait.white, portrait.hair, 2.2);
@@ -68,7 +71,7 @@ export default function Teacher({ speaking, label, appearance = 'rose', mood = '
       scene.add(key);
       const teacher = new THREE.Group();
       scene.add(teacher);
-      const ball = own(new THREE.SphereGeometry(1, 40, 32));
+      const ball = own(new THREE.SphereGeometry(1, 32, 24));
       const part = (material: Material, scale: number[], position: number[], parent = teacher) => {
         const mesh = new THREE.Mesh(ball, material);
         mesh.scale.set(scale[0], scale[1], scale[2]);
@@ -77,7 +80,6 @@ export default function Teacher({ speaking, label, appearance = 'rose', mood = '
         return mesh;
       };
       part(clothing, [.76, .66, .35], [0, -.94, 0]);
-      part(collar, [.24, .30, .045], [0, -.80, .33]);
       for (const side of [-1, 1]) {
         const arm = part(clothing, [.18, .42, .20], [side * .67, -.88, 0]);
         arm.rotation.z = side * .12;
@@ -88,12 +90,26 @@ export default function Teacher({ speaking, label, appearance = 'rose', mood = '
         }
       }
       part(skin, [.18, .20, .18], [0, -.23, .02]);
-      const leftCollar = part(collar, [.22, .10, .07], [-.19, -.46, .33]);
-      const rightCollar = part(collar, [.22, .10, .07], [.19, -.46, .33]);
+      const leftCollar = part(collar, [.14, .07, .045], [-.14, -.40, .33]);
+      const rightCollar = part(collar, [.14, .07, .045], [.14, -.40, .33]);
       leftCollar.rotation.z = -.5;
       rightCollar.rotation.z = .5;
-      part(collar, [.04, .04, .025], [-.32, -.85, .34]);
-      part(collar, [.04, .04, .025], [-.32, -1.09, .32]);
+      part(collar, [.025, .025, .02], [0, -.75, .36]);
+      part(collar, [.025, .025, .02], [0, -1.04, .35]);
+      if (customization.badge) {
+        const star = new THREE.Shape();
+        for (let point = 0; point < 10; point++) {
+          const radius = point % 2 === 0 ? .13 : .06;
+          const angle = Math.PI / 2 + point * Math.PI / 5;
+          const x = Math.cos(angle) * radius, y = Math.sin(angle) * radius;
+          if (point === 0) star.moveTo(x, y); else star.lineTo(x, y);
+        }
+        star.closePath();
+        const badge = new THREE.Mesh(own(new THREE.ShapeGeometry(star)), badgeColor);
+        badge.name = 'companion-star-badge';
+        badge.position.set(-.32, -.84, .36);
+        teacher.add(badge);
+      }
 
       const head = new THREE.Group();
       head.position.set(0, .66, 0);
@@ -111,21 +127,29 @@ export default function Teacher({ speaking, label, appearance = 'rose', mood = '
       const fringeRight = part(hair, [.29, .17, .18], [.37, .59, .34], head);
       fringeRight.rotation.z = -.5;
       part(hair, [.31, .16, .19], [-.17, .75, .12], head).rotation.z = .15;
-      const clip = part(clothing, [.11, .035, .03], [.53, .39, .43], head);
-      clip.rotation.z = -.65;
+      if (customization.bow) {
+        const bow = new THREE.Group();
+        bow.name = 'companion-hair-bow'; head.add(bow);
+        part(clothing, [.095, .07, .035], [.46, .43, .45], bow).rotation.z = -.35;
+        part(clothing, [.095, .07, .035], [.62, .43, .45], bow).rotation.z = .35;
+        part(collar, [.035, .035, .04], [.54, .43, .47], bow);
+      } else {
+        const clip = part(clothing, [.11, .035, .03], [.53, .39, .43], head);
+        clip.rotation.z = -.65;
+      }
       const eyes = new THREE.Group();
       head.add(eyes);
-      part(eyeWhite, [.11, .13, .04], [-.235, .06, .55], eyes);
-      part(eyeWhite, [.11, .13, .04], [.235, .06, .55], eyes);
-      part(ink, [.055, .085, .02], [-.225, .055, .595], eyes);
-      part(ink, [.055, .085, .02], [.225, .055, .595], eyes);
+      part(eyeWhite, [.125, .145, .04], [-.235, .06, .55], eyes);
+      part(eyeWhite, [.125, .145, .04], [.235, .06, .55], eyes);
+      part(ink, [.06, .09, .02], [-.225, .055, .595], eyes);
+      part(ink, [.06, .09, .02], [.225, .055, .595], eyes);
       part(eyeWhite, [.025, .03, .012], [-.247, .09, .634], eyes);
       part(eyeWhite, [.025, .03, .012], [.203, .09, .634], eyes);
       const leftBrow = part(hair, [.125, .027, .025], [-.235, .30, .53], head);
       const rightBrow = part(hair, [.125, .027, .025], [.235, .30, .53], head);
       leftBrow.rotation.z = .12;
       rightBrow.rotation.z = -.12;
-      part(skin, [.065, .08, .065], [0, -.105, .58], head);
+      part(skin, [.04, .055, .035], [0, -.105, .58], head);
       if (customization.glasses) {
         const frameGeometry = own(new THREE.TorusGeometry(.15, .015, 8, 32));
         for (const side of [-1, 1]) {
@@ -146,9 +170,12 @@ export default function Teacher({ speaking, label, appearance = 'rose', mood = '
       head.add(smile);
       // Eye direction is toward this virtual camera only, never a device camera.
       head.lookAt(camera.position);
+      const neutralTilt = head.rotation.z;
       const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
       let frame = 0;
       let lost = false;
+      let inView = true;
+      const visible = () => !disposed && !lost && !document.hidden && inView;
       const draw = (time: number) => {
         const seconds = time / 1000;
         eyes.scale.y = !reduced.matches && seconds % 4.7 > 4.55 ? .12 : 1;
@@ -156,18 +183,19 @@ export default function Teacher({ speaking, label, appearance = 'rose', mood = '
         smile.visible = !talking.current;
         mouth.visible = talking.current;
         teacher.position.y = reduced.matches ? 0 : Math.sin(seconds * (mood === 'calm' ? .8 : 1.6)) * (mood === 'cheerful' ? .035 : .015);
+        head.rotation.z = neutralTilt + (reduced.matches ? 0 : Math.sin(seconds * .7) * .02);
         renderer.render(scene, camera);
       };
       const animate = (time: number) => {
-        if (disposed || lost) return;
-        try { if (!document.hidden) draw(time); }
+        frame = 0;
+        if (!visible()) return;
+        try { draw(time); }
         catch { cleanup(); setStatus('unavailable'); return; }
-        if (lost) return;
-        frame = requestAnimationFrame(animate);
+        if (!lost && !reduced.matches) frame = requestAnimationFrame(animate);
       };
       const resize = new ResizeObserver(() => {
         if (lost || disposed) return;
-        try { fit(); draw(0); }
+        try { fit(); if (visible()) draw(0); }
         catch { cleanup(); setStatus('unavailable'); }
       });
       // Measure the stage: the canvas is hidden while the first frame is prepared.
@@ -178,11 +206,23 @@ export default function Teacher({ speaking, label, appearance = 'rose', mood = '
         camera.aspect = width / height;
         camera.updateProjectionMatrix();
       };
-      const observer = new MutationObserver(updateColors);
+      const synchronize = () => {
+        cancelAnimationFrame(frame); frame = 0;
+        if (!visible()) return;
+        try { fit(); draw(performance.now()); setStatus('ready'); }
+        catch { cleanup(); setStatus('unavailable'); return; }
+        if (!reduced.matches) frame = requestAnimationFrame(animate);
+      };
+      const observer = new MutationObserver(() => { updateColors(); synchronize(); });
+      const intersection = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver(entries => {
+        inView = entries.some(entry => entry.isIntersecting);
+        synchronize();
+      });
       const contextLost = (event: Event) => {
         event.preventDefault();
         lost = true;
         cancelAnimationFrame(frame);
+        frame = 0;
         setStatus('unavailable');
       };
       const contextRestored = () => {
@@ -190,16 +230,21 @@ export default function Teacher({ speaking, label, appearance = 'rose', mood = '
         lost = false;
         try {
           fit();
+          if (!visible()) return;
           draw(0);
           if (lost) return;
           setStatus('ready');
-          frame = requestAnimationFrame(animate);
+          if (!reduced.matches) frame = requestAnimationFrame(animate);
         } catch { lost = true; setStatus('unavailable'); }
       };
       stop = () => {
         cancelAnimationFrame(frame);
         resize.disconnect();
         observer.disconnect();
+        intersection?.disconnect();
+        document.removeEventListener('visibilitychange', synchronize);
+        reduced.removeEventListener('change', synchronize);
+        if (redraw.current === synchronize) redraw.current = null;
         renderer.domElement.removeEventListener('webglcontextlost', contextLost);
         renderer.domElement.removeEventListener('webglcontextrestored', contextRestored);
       };
@@ -207,18 +252,22 @@ export default function Teacher({ speaking, label, appearance = 'rose', mood = '
       renderer.domElement.addEventListener('webglcontextrestored', contextRestored);
       resize.observe(stage);
       observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+      intersection?.observe(stage);
+      document.addEventListener('visibilitychange', synchronize);
+      reduced.addEventListener('change', synchronize);
+      redraw.current = synchronize;
       fit();
       draw(0);
       if (!lost) {
         setStatus('ready');
-        frame = requestAnimationFrame(animate);
+        if (visible() && !reduced.matches) frame = requestAnimationFrame(animate);
       }
     }).catch(() => {
       cleanup();
       if (!disposed) setStatus('unavailable');
     });
     return () => { disposed = true; cleanup(); };
-  }, [appearance, mood, customization.shirt, customization.hair, customization.hairLength, customization.glasses]);
+  }, [appearance, mood, customization.shirt, customization.hair, customization.hairLength, customization.glasses, customization.bow, customization.badge]);
 
   return <div className="teacher-stage" role="img" aria-label={label}>
     <div className="teacher-orbit" aria-hidden="true" />
@@ -239,10 +288,14 @@ export default function Teacher({ speaking, label, appearance = 'rose', mood = '
           <path d="M27 202q-4 14 5 16h8q8-2 3-15ZM149 203q-5 13 3 15h8q9-2 5-16Z" />
           <path d="M49 73q-1-44 49-44t50 44v23c0 31-22 49-49 49S49 127 49 96Z" />
         </g>
-        <path fill={portrait.white} d="m81 145 18 12 18-12-5 75H86Z" />
-        <path fill={portrait.white} d="m85 139 14 12-15 13-10-19Zm28 0-14 12 15 13 10-19Z" />
+        <path fill={portrait.white} d="m87 142 12 9-9 7-9-9Zm24 0-12 9 9 7 9-9Z" />
+        {customization.badge && <path data-accessory="badge" fill="var(--cp-warning)"
+          d="m69 164 3 7 8 1-6 5 2 8-7-4-7 4 2-8-6-5 8-1Z" />}
         <path fill={avatarColors[customization.hair]} d="M46 76C37 31 63 17 95 18c38-2 62 26 57 59-16-3-27-15-33-29-15 18-39 24-73 28Z" />
-        <path stroke={customization.shirt === 'theme' ? `var(${outfit[appearance]})` : avatarColors[customization.shirt]} strokeWidth="5" strokeLinecap="round" d="m140 53 5 11" />
+        {customization.bow ? <g data-accessory="bow" fill={customization.shirt === 'theme' ? `var(${outfit[appearance]})` : avatarColors[customization.shirt]}>
+          <path d="m140 57-10-9q-8 12 0 18Zm0 0 10-9q8 12 0 18Z" />
+          <circle cx="140" cy="57" r="3" fill={portrait.white} />
+        </g> : <path stroke={customization.shirt === 'theme' ? `var(${outfit[appearance]})` : avatarColors[customization.shirt]} strokeWidth="5" strokeLinecap="round" d="m140 53 5 11" />}
         <g fill={portrait.white}>
           <ellipse cx="78" cy="88" rx="11" ry="13" /><ellipse cx="121" cy="88" rx="11" ry="13" />
         </g>

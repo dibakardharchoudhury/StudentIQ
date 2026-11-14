@@ -4,8 +4,13 @@ export const avatarColors = {
   blue: '#386eb0', purple: '#7352bc', pink: '#b85185', teal: '#27858a',
 };
 type AvatarColor = keyof typeof avatarColors;
-export type AvatarStyle = { shirt: AvatarColor | 'theme'; hair: AvatarColor; hairLength: 'short' | 'long'; glasses: boolean };
-export const defaultAvatar: AvatarStyle = { shirt: 'theme', hair: 'brown', hairLength: 'long', glasses: false };
+export type AvatarStyle = {
+  shirt: AvatarColor | 'theme'; hair: AvatarColor; hairLength: 'short' | 'long';
+  glasses: boolean; bow: boolean; badge: boolean;
+};
+export const defaultAvatar: AvatarStyle = {
+  shirt: 'theme', hair: 'brown', hairLength: 'long', glasses: false, bow: false, badge: true,
+};
 
 const colors: Record<string, AvatarColor> = {
   brown: 'brown', black: 'black', blonde: 'blonde', white: 'white', red: 'red', orange: 'orange',
@@ -48,10 +53,17 @@ export function applyAvatarPrompt(prompt: string, current: AvatarStyle): AvatarS
   remaining = remaining.replace(boundary('(short|long|kort|langt)\\s+(?:hair|hår)'), (_match, length: string) => {
     set('hairLength', length === 'short' || length === 'kort' ? 'short' : 'long'); return ' ';
   });
-  remaining = remaining.replace(boundary('(?:no|without|remove|uten|fjern)\\s+(?:glasses|briller)'), () => {
+  const removal = '(?:no|without|remove|uten|fjern)\\s+(?:(?:a|an|the|en|et)\\s+)?';
+  remaining = remaining.replace(boundary(`${removal}(?:glasses|briller)`), () => {
     set('glasses', false); return ' ';
   });
   remaining = remaining.replace(boundary('(?:glasses|briller)'), () => { set('glasses', true); return ' '; });
+  for (const [key, nouns] of [['bow', 'hair bow|bow|sløyfe'], ['badge', 'star badge|stjernemerke']] as const) {
+    remaining = remaining.replace(boundary(`${removal}(?:${nouns})`), () => {
+      set(key, false); return ' ';
+    });
+    remaining = remaining.replace(boundary(nouns), () => { set(key, true); return ' '; });
+  }
   remaining = remaining.replace(boundary('please|make|my|the|teacher|avatar|companion|have|with|and|a|an|to|change|give|me|it|want|i|use|add|wearing|can|you|is|er|vær|så|snill|gjør|min|lærer|læreren|avatar|ha|med|og|en|et|til|endre|gi|meg|jeg|vil|bruk|legg'), ' ');
   if (!changes || remaining.replace(/[\s,.;:!?'"]/g, '')) throw new AvatarPromptError('unsupported');
   return next;

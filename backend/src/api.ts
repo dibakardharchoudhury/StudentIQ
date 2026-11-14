@@ -32,6 +32,7 @@ import { PreferencesRepository } from "./preferences.js";
 import { ApprovalRequiredError, type SocialAuth } from "./social-auth.js";
 import { AccessRequestError, type SocialDirectory } from "./social-directory.js";
 import { chooseLearningTopic } from "./curriculum.js";
+import { libraryCatalog, libraryLanguage, libraryQuestion } from "./question-bank.js";
 import {
   QuizRepository, QuizAnswerConflictError, QuizDuplicateError, QuizNotFoundError,
   UnsupportedQuizSubjectError, validateQuizInput, validateQuizAnswer, chooseMathVisual, type QuizGenerator
@@ -315,6 +316,46 @@ export function createOperations() {
     }
   };
 
+  const listLibrary: Operation = async (request) => {
+    const query = new URL(request.url).searchParams;
+    if ([...query.keys()].some(key => key !== "language") || query.getAll("language").length !== 1) {
+      throw new InputValidationError();
+    }
+    return json(200, { version: 1, questions: libraryCatalog(libraryLanguage(query.get("language"))) });
+  };
+
+  const createLibraryQuiz: Operation = async (request, _principalOid, { config, quiz }) => {
+    const body = await readJson(request);
+    if (!body || typeof body !== "object" || Array.isArray(body) ||
+        Object.keys(body).length !== 1 || !("language" in body)) throw new InputValidationError();
+    const language = libraryLanguage(body.language);
+    const { subject, generated, libraryId, level, hint } = libraryQuestion(request.params.id ?? "", language);
+    try {
+      return json(200, await quiz.createLibrary(config.parentOid, { subject, language }, generated,
+        { id: libraryId, level, hint }));
+    } catch {
+      throw new OperationFailure("persistence");
+    }
+  };
+
+  const quizState: Operation = async (request, _principalOid, { config, quiz }) => {
+    try {
+      return json(200, await quiz.state(config.parentOid, request.params.id ?? ""));
+    } catch (error) {
+      if (error instanceof InputValidationError || error instanceof QuizNotFoundError) throw error;
+      throw new OperationFailure("persistence");
+    }
+  };
+
+  const quizHint: Operation = async (request, _principalOid, { config, quiz }) => {
+    try {
+      return json(200, await quiz.hint(config.parentOid, request.params.id ?? ""));
+    } catch (error) {
+      if (error instanceof InputValidationError || error instanceof QuizNotFoundError) throw error;
+      throw new OperationFailure("persistence");
+    }
+  };
+
   const quizAttempts: Operation = async (request, _principalOid, { config, quiz }) => {
     const { cursor, pageSize } = historyQuery(request, 50);
     try {
@@ -464,6 +505,7 @@ export function createOperations() {
   return {
     health, me, socialSession, socialLogout, listAccounts, saveAccount, removeAccount,
     getPreferences, putPreferences, createQuiz, answerQuiz, quizAttempts,
+    listLibrary, createLibraryQuiz, quizState, quizHint,
     listReminders, saveReminder, deleteReminder,
     recordPiano, listPiano, listSessions, getSession, chat, speechToken
   };

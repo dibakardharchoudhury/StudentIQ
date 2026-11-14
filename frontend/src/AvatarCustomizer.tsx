@@ -12,18 +12,18 @@ export default function AvatarCustomizer({ value, onChange, language, disabled =
   const hint = useId();
   const c = language === 'nb' ? {
     title: 'Design læringsvennen din', label: 'Hvordan skal læreren se ut?',
-    hint: 'Prøv «blå genser, kort hår og briller». Støtter farger på hår og klær, kort eller langt hår og briller. Bruk separate uttrykk for hver endring.',
+    hint: 'Prøv «lilla hår, blå genser og sløyfe». Støtter farger, kort/langt hår, briller, sløyfe og stjernemerke. Bruk «uten» for å fjerne tilbehør.',
     local: 'Endres med en gang, bare i denne fanen. Ingen AI-kall, bilder eller lagret prompt.',
     apply: 'Endre avatar', reset: 'Tilbakestill avatar',
-    unsupported: 'Det kan jeg ikke tegne ennå. Bruk hår- eller klesfarger, kort/langt hår og briller/uten briller. Ingen endringer ble gjort.',
+    unsupported: 'Det kan jeg ikke tegne ennå. Bruk hår- eller klesfarger, kort/langt hår, briller, sløyfe eller stjernemerke. Ingen endringer ble gjort.',
     conflicting: 'Velg bare én verdi for hver egenskap, for eksempel én hårfarge. Ingen endringer ble gjort.',
     changed: 'Avatarens stil er oppdatert i denne fanen.', restored: 'Standardavataren er tilbake.',
   } : {
     title: 'Design your learning companion', label: 'How should your teacher look?',
-    hint: 'Try “blue shirt, short hair and glasses”. Supports hair and shirt colours, short or long hair, and glasses. Use a separate phrase for each change.',
+    hint: 'Try “purple hair, blue shirt and a bow”. Supports colours, short/long hair, glasses, a bow and a star badge. Use “without” to remove accessories.',
     local: 'Changes instantly in this tab only. No AI calls, generated images, or stored prompt.',
     apply: 'Change avatar', reset: 'Reset avatar',
-    unsupported: 'I cannot draw that yet. Use hair or shirt colours, short/long hair, and glasses/no glasses. Nothing was changed.',
+    unsupported: 'I cannot draw that yet. Use hair or shirt colours, short/long hair, glasses, a bow or a star badge. Nothing was changed.',
     conflicting: 'Choose one value for each feature, such as one hair colour. Nothing was changed.',
     changed: 'Avatar style updated in this tab.', restored: 'Default avatar restored.',
   };

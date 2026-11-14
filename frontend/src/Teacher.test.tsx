@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
     setSize: ReturnType<typeof vi.fn>;
   }[],
   disconnects: [] as ReturnType<typeof vi.fn>[],
+  motionListeners: new Set<() => void>(),
 }));
 
 vi.mock('three', async importOriginal => {
@@ -48,13 +49,18 @@ beforeEach(() => {
   state.frames.clear();
   state.renderers.length = 0;
   state.disconnects.length = 0;
+  state.motionListeners.clear();
   vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
     const id = ++state.nextFrame;
     state.frames.set(id, callback);
     return id;
   }));
   vi.stubGlobal('cancelAnimationFrame', vi.fn((id: number) => state.frames.delete(id)));
-  vi.stubGlobal('matchMedia', vi.fn(() => ({ get matches() { return state.reduced; } })));
+  vi.stubGlobal('matchMedia', vi.fn(() => ({
+    get matches() { return state.reduced; },
+    addEventListener: (_name: string, handler: () => void) => state.motionListeners.add(handler),
+    removeEventListener: (_name: string, handler: () => void) => state.motionListeners.delete(handler),
+  })));
   vi.stubGlobal('ResizeObserver', class {
     observe = vi.fn();
     disconnect = vi.fn();
@@ -66,6 +72,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   document.documentElement.removeAttribute('style');
   document.documentElement.removeAttribute('data-theme');
@@ -226,6 +233,7 @@ it('keeps a still portrait with reduced motion and disposes the previous customi
   tick(4580);
   expect(positions()).toEqual(still);
   state.reduced = false;
+  act(() => state.motionListeners.forEach(handler => handler()));
   tick(1000);
   expect(positions()).not.toEqual(still);
   const renders = renderer.render.mock.calls.length;
@@ -238,6 +246,58 @@ it('keeps a still portrait with reduced motion and disposes the previous customi
   expect(renderer.dispose).toHaveBeenCalledOnce();
   expect(renderer.domElement.isConnected).toBe(false);
   expect(state.frames.size).toBe(1);
+});
+
+it('pauses offscreen animation and resumes only when the teacher comes back into view', async () => {
+  state.unavailable = false;
+  let intersect: (visible: boolean) => void = () => {};
+  vi.stubGlobal('IntersectionObserver', class {
+    constructor(callback: (entries: { isIntersecting: boolean }[]) => void) {
+      intersect = visible => callback([{ isIntersecting: visible }]);
+    }
+    observe = vi.fn();
+    disconnect = vi.fn();
+  });
+  const { unmount } = render(<Teacher speaking={false} label="Hello" />);
+  await waitFor(() => expect(state.renderers[0]?.render).toHaveBeenCalled());
+  const renderer = state.renderers[0];
+  act(() => intersect(false));
+  const count = renderer.render.mock.calls.length;
+  expect(state.frames.size).toBe(0);
+  tick(1000);
+  expect(renderer.render).toHaveBeenCalledTimes(count);
+  act(() => intersect(true));
+  expect(renderer.render).toHaveBeenCalledTimes(count + 1);
+  expect(state.frames.size).toBe(1);
+  unmount();
+  expect(state.motionListeners.size).toBe(0);
+});
+
+it('uses no continuous render loop in reduced motion while still responding to speech', async () => {
+  state.unavailable = false; state.reduced = true;
+  const view = render(<Teacher speaking={false} label="Ready" />);
+  await waitFor(() => expect(state.renderers[0]?.render).toHaveBeenCalled());
+  const renderer = state.renderers[0];
+  const count = renderer.render.mock.calls.length;
+  expect(state.frames.size).toBe(0);
+  tick(5000);
+  expect(renderer.render).toHaveBeenCalledTimes(count);
+  view.rerender(<Teacher speaking label="Speaking" />);
+  expect(renderer.render).toHaveBeenCalledTimes(count + 1);
+  expect(state.frames.size).toBe(0);
+});
+
+it('applies a bow and removes the decorative badge in both renderers', async () => {
+  state.unavailable = false;
+  const view = render(<Teacher speaking={false} label="Buddy"
+    customization={{ ...defaultAvatar, bow: true, badge: false }} />);
+  await waitFor(() => expect(state.renderers[0]?.render).toHaveBeenCalled());
+  const scene = state.renderers[0].render.mock.calls[0][0] as Scene;
+  expect(scene.getObjectByName('companion-hair-bow')).toBeDefined();
+  expect(scene.getObjectByName('companion-star-badge')).toBeUndefined();
+  act(() => state.renderers[0].domElement.dispatchEvent(new Event('webglcontextlost', { cancelable: true })));
+  expect(view.container.querySelector('[data-accessory="bow"]')).toBeInTheDocument();
+  expect(view.container.querySelector('[data-accessory="badge"]')).not.toBeInTheDocument();
 });
 
 it('cleans up a renderer whose initial frame fails and retains the human illustration', async () => {

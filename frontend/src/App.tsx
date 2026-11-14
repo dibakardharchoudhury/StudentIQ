@@ -19,6 +19,9 @@ import Quiz from './Quiz';
 import PracticeProgress from './PracticeProgress';
 import BuildStatus from './BuildStatus';
 import AvatarCustomizer from './AvatarCustomizer';
+import QuestionLibrary from './QuestionLibrary';
+import RobotExplorer from './RobotExplorer';
+import BuddyBreak from './BuddyBreak';
 import { defaultAvatar, type AvatarStyle } from './avatar-style';
 
 type Runtime = { auth: ParentAuth; api: Api; config: AppConfig };
@@ -201,6 +204,7 @@ export default function App() {
           <div className="welcome-sparkles" aria-hidden="true"><span>✦</span><span>✳</span><span>✧</span><span>♫</span></div>
           <p className="small">{c.teacherNote}</p>
           <AvatarCustomizer value={avatarStyle} onChange={setAvatarStyle} language={language} disabled={authBusy} />
+          <BuddyBreak language={language} disabled={authBusy} />
         </section>
       </main>}
     <footer>
@@ -236,7 +240,7 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
   const c = copy(language);
   const [localAvatarStyle, setLocalAvatarStyle] = useState<AvatarStyle>(defaultAvatar);
   const [view, setView] = useState<View>('learn');
-  const [learningPane, setLearningPane] = useState<'mission' | 'talk' | 'explore'>('mission');
+  const [learningPane, setLearningPane] = useState<'mission' | 'talk' | 'explore' | 'library'>('mission');
   const [mathActivity, setMathActivity] = useState<'array' | 'fraction'>('array');
   const [configView, setConfigView] = useState<'people' | 'calendar'>('people');
   const [subject, setSubject] = useState('maths');
@@ -259,6 +263,7 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
   const [plannerBusy, setPlannerBusy] = useState(false);
   const [pianoBusy, setPianoBusy] = useState(false);
   const [quizBusy, setQuizBusy] = useState(false);
+  const [libraryBusy, setLibraryBusy] = useState(false);
   const [paused, setPaused] = useState(false);
   const [encouragement, setEncouragement] = useState(false);
   const [breakMinutes, setBreakMinutes] = useState('off');
@@ -266,7 +271,7 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
   const [sessionClock, setSessionClock] = useState(0);
   const [preferences, setPreferences] = useState<Preferences | null>(null);
   const [preferencesBusy, setPreferencesBusy] = useState(false);
-  const toolBusy = plannerBusy || pianoBusy || quizBusy;
+  const toolBusy = plannerBusy || pianoBusy || quizBusy || libraryBusy;
   const request = useRef<AbortController | null>(null);
   const locked = useRef(false);
   const alive = useRef(true);
@@ -286,10 +291,10 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
     return () => { onBusyChange?.(false); };
   }, [busy, toolBusy, preferencesBusy, mic, onBusyChange]);
   useEffect(() => {
-    if (paused || breakMinutes === 'off' || view !== 'learn') return;
+    if (paused || breakMinutes === 'off' || view !== 'learn' || learningPane !== 'talk') return;
     const timer = setTimeout(() => setBreakSuggested(true), Number(breakMinutes) * 60_000);
     return () => clearTimeout(timer);
-  }, [breakMinutes, paused, sessionClock, view]);
+  }, [breakMinutes, paused, sessionClock, view, learningPane]);
   const cancelVoice = useCallback(() => {
     speech.current?.cancel();
     micRef.current = 'off'; setMic('off'); setSpeaking(false);
@@ -441,6 +446,13 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
   }
   const disabled = busy || preferencesBusy || mic !== 'off' || paused;
   const activityDisabled = disabled || toolBusy || needsRefresh;
+  function speakPractice(text: string) {
+    if (!mutedRef.current && online && !paused) {
+      void speech.current?.say(text, language, preferences?.voice ?? 'default').catch(error => {
+        if (alive.current) setError(`${c.voiceError} ${message(error)}`);
+      });
+    }
+  }
   function addToDraft(question: string) {
     if (locked.current || micRef.current !== 'off' || activityDisabled) return;
     const nextDraft = `${draft}${draft ? '\n\n' : ''}${question}`;
@@ -528,6 +540,7 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
           label={speaking ? c.teacherSpeaking : c.teacherIdle} customization={avatarStyle ?? localAvatarStyle} />
         <AvatarCustomizer value={avatarStyle ?? localAvatarStyle} onChange={onAvatarChange ?? setLocalAvatarStyle}
           language={language} disabled={disabled || toolBusy} />
+        <BuddyBreak language={language} disabled={disabled || toolBusy} />
         <p className="small teacher-note">{c.teacherNote}</p>
         <button type="button" className="talk-shortcut" disabled={disabled || toolBusy} onClick={() => {
           if (learningPane === 'talk') textarea.current?.focus();
@@ -543,10 +556,10 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
       </aside>
       <section className="lesson-panel" aria-label={c.learn}>
         <div className="lesson-heading">
-          <div><p className="eyebrow">{c.currentWorld}</p><h2>{subjectLabel(subject, language)}</h2></div>
-          <button onClick={() => newSession()} disabled={disabled || toolBusy}>{c.newSession} +</button>
+          <div><p className="eyebrow">{c.currentWorld}</p><h2>{learningPane === 'library' ? c.libraryMode : subjectLabel(subject, language)}</h2></div>
+          {learningPane !== 'library' && <button onClick={() => newSession()} disabled={disabled || toolBusy}>{c.newSession} +</button>}
         </div>
-        <details className="world-chooser" ref={subjectChooser}>
+        <details className="world-chooser" ref={subjectChooser} hidden={learningPane === 'library'}>
         <summary>{c.changeWorld}</summary>
         <div className="subject-picker" role="group" aria-label={c.subject}>
           {subjects.map(value => <button key={value} aria-pressed={subject === value} disabled={disabled || toolBusy}
@@ -557,7 +570,7 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
         </div>
         </details>
         <div className="learning-modes" role="group" aria-label={c.learningModes}>
-          {([['mission', c.missionMode], ['talk', c.talkMode], ['explore', c.exploreMode]] as const).map(([pane, label]) =>
+          {([['library', c.libraryMode], ['mission', c.missionMode], ['talk', c.talkMode], ['explore', c.exploreMode]] as const).map(([pane, label]) =>
             <button type="button" key={pane} aria-pressed={learningPane === pane} disabled={disabled || toolBusy}
               onClick={() => { cancelVoice(); setLearningPane(pane); }}>{label}</button>)}
         </div>
@@ -565,13 +578,13 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
         <p className="qa-note">{c.qaNote}</p>
         <Quiz key={`${subject}-${language}`} api={api} subject={subject} language={language}
           disabled={disabled || pianoBusy || plannerBusy || needsRefresh} online={online} onBusyChange={setQuizBusy}
-          onAsk={addToDraft} onStop={cancelVoice} voiceEnabled={!muted} onSpeak={text => {
-            if (!mutedRef.current && online && !paused) {
-              void speech.current?.say(text, language, preferences?.voice ?? 'default').catch(error => {
-                if (alive.current) setError(`${c.voiceError} ${message(error)}`);
-              });
-            }
-          }} />
+          onAsk={addToDraft} onStop={cancelVoice} voiceEnabled={!muted} onSpeak={speakPractice} />
+        </div>
+        <div hidden={learningPane !== 'library'}>
+          <QuestionLibrary api={api} language={language} active={learningPane === 'library'} online={online}
+            disabled={disabled || pianoBusy || plannerBusy || quizBusy || needsRefresh}
+            onBusyChange={setLibraryBusy} onAsk={addToDraft} onStop={cancelVoice}
+            voiceEnabled={!muted} onSpeak={speakPractice} />
         </div>
         <div hidden={learningPane !== 'talk'}>
         <div ref={conversation} className="conversation" role="region" tabIndex={0}
@@ -635,7 +648,7 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
             }}>{paused ? c.resume : c.pause}</button>
           </div>
           <p className="small">{c.paceNote}</p>
-          <GentleCheckIn language={language} paused={paused} onBreak={() => { cancelVoice(); setPaused(true); }} />
+          <GentleCheckIn language={language} paused={paused || learningPane !== 'talk'} onBreak={() => { cancelVoice(); setPaused(true); }} />
           {breakSuggested && !paused && <div className="notice" role="status"><p>{c.breakSuggestion}</p>
             <button type="button" onClick={() => setBreakSuggested(false)}>{c.dismissBreak}</button></div>}
           {paused && <div className="break-card" role="status"><h2>{c.pausedTitle}</h2><p>{c.pausedBody}</p></div>}
@@ -659,7 +672,12 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
           </>}
           {(subject === 'english' || subject === 'norwegian') && <SentenceBuilder key={subject} subject={subject}
             language={language} disabled={activityDisabled} onAsk={addToDraft} />}
-          {subject === 'science' && <WaterCycle language={language} disabled={activityDisabled} onAsk={addToDraft} />}
+          {(subject === 'science' || subject === 'nature') && <WaterCycle language={language} disabled={activityDisabled} onAsk={addToDraft} />}
+          {subject === 'coding' && <RobotExplorer language={language} disabled={activityDisabled} />}
+          {['space', 'art', 'geography', 'history', 'currentAffairs'].includes(subject) && <div className="activity-link">
+            <p>{c.libraryExplore}</p><button type="button" disabled={activityDisabled}
+              onClick={() => setLearningPane('library')}>{c.libraryMode} →</button>
+          </div>}
         </section>
       </section>
     </div></> : <section className="records-panel">

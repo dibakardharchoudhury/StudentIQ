@@ -103,6 +103,54 @@ test("all application routes require a successful token validator", async () => 
   assert.equal(health.status, 200);
 });
 
+test("library browsing, issuance, hints and grading need authorization but no model, context or quota calls", async () => {
+  const operations = createOperations();
+  const denied = dependencies(async () => { throw new AuthenticationError(401); });
+  for (const operation of [operations.listLibrary, operations.createLibraryQuiz, operations.quizState, operations.quizHint]) {
+    assert.equal((await dispatch(request("library?language=en"), operation, denied)).status, 401);
+  }
+  const deps = dependencies(async () => SOCIAL_STUDENT);
+  deps.quizGenerator.generate = async () => { throw new Error("Model must not run"); };
+  deps.quota.consume = async () => { throw new Error("Quota must not run"); };
+  deps.repository.loadContext = async () => { throw new Error("Context must not load"); };
+  const catalog = await dispatch(request("library?language=nb"), operations.listLibrary, deps);
+  assert.equal(catalog.status, 200);
+  assert.equal(catalog.headers && new Headers(catalog.headers).get("Cache-Control"), "no-store");
+  const body = catalog.jsonBody as { questions: { id: string; subject: string }[] };
+  assert.equal(body.questions.length, 138);
+  assert.equal(JSON.stringify(body).includes("correctIndex"), false);
+  const create = () => Object.assign(request("library/questions/math-book", {
+    method: "POST", body: JSON.stringify({ language: "nb" })
+  }), { params: { id: "maths-books" } });
+  const created = await dispatch(create(), operations.createLibraryQuiz, deps);
+  assert.equal(created.status, 200);
+  const quiz = created.jsonBody as { id: string; options: string[] };
+  assert.equal("explanation" in quiz, false);
+  const state = () => Object.assign(request(`quiz/${quiz.id}`), { params: { id: quiz.id } });
+  assert.deepEqual((await dispatch(state(), operations.quizState, deps)).jsonBody, { id: quiz.id, answer: null });
+  assert.equal((await dispatch(state(), operations.quizHint, deps)).status, 200);
+  const answer = Object.assign(request(`quiz/${quiz.id}/answer`, {
+    method: "POST", body: JSON.stringify({ answerIndex: quiz.options.indexOf("25") })
+  }), { params: { id: quiz.id } });
+  assert.equal((await dispatch(answer, operations.answerQuiz, deps)).status, 200);
+  assert.equal((await dispatch(state(), operations.quizState, deps)).status, 200);
+  assert.equal((await dispatch(request("quiz/attempts"), operations.quizAttempts, deps)).status, 200);
+  assert.equal((await dispatch(create(), operations.createLibraryQuiz, deps)).status, 200);
+  for (const path of ["library", "library?language=fr", "library?language=en&language=nb", "library?language=en&extra=true"]) {
+    assert.equal((await dispatch(request(path), operations.listLibrary, deps)).status, 400);
+  }
+  for (const invalid of [{ language: "fr" }, { language: "en", correctIndex: 0 }]) {
+    const invalidRequest = Object.assign(request("library/questions/maths-books", {
+      method: "POST", body: JSON.stringify(invalid)
+    }), { params: { id: "maths-books" } });
+    assert.equal((await dispatch(invalidRequest, operations.createLibraryQuiz, deps)).status, 400);
+  }
+  const blobs = new MemoryBlobStore();
+  blobs.failWritesContaining = "/quiz/";
+  deps.quiz = new QuizRepository(blobs);
+  assert.equal((await dispatch(create(), operations.createLibraryQuiz, deps)).status, 503);
+});
+
 test("only the administrator can approve, list, or revoke parent and student accounts", async () => {
   const operations = createOperations();
   const deps = dependencies(async () => config.parentOid);

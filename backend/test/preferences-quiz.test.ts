@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { InputValidationError, validatePreferences, type BlobValue, type JsonBlobStore } from "../src/contracts.js";
 import { PreferencesRepository, readPreferenceDefaults } from "../src/preferences.js";
 import { chooseLearningTopic } from "../src/curriculum.js";
+import { libraryQuestion } from "../src/question-bank.js";
 import {
   QuizRepository, QuizAnswerConflictError, QuizDuplicateError, QuizNotFoundError,
   UnsupportedQuizSubjectError, validateGeneratedQuiz, validateQuizAnswer, validateQuizInput, chooseMathVisual,
@@ -47,6 +48,39 @@ const generated: GeneratedQuiz = {
   question: "What is 2 + 2?", options: ["3", "4", "5", "6"], correctIndex: 1,
   explanation: "Adding two and two gives four."
 };
+
+test("authored practice repeats independently, hides its keys and reconciles an idempotent durable answer", async () => {
+  const blobs = new MemoryBlobStore();
+  const repository = new QuizRepository(blobs);
+  const item = libraryQuestion("maths-books", "en");
+  const create = () => repository.createLibrary(parent, { subject: item.subject, language: "en" }, item.generated,
+    { id: item.libraryId, level: item.level, hint: item.hint });
+  const first = await create();
+  const repeat = await create();
+  assert.notEqual(first.id, repeat.id);
+  assert.equal(first.source, "library");
+  assert.equal("correctIndex" in first, false);
+  assert.equal("explanation" in first, false);
+  assert.equal("hint" in first, false);
+  assert.deepEqual(await repository.state(parent, first.id), { id: first.id, answer: null });
+  assert.deepEqual(await repository.hint(parent, first.id), { hint: item.hint });
+  await assert.rejects(repository.state(otherFamily, first.id), QuizNotFoundError);
+  await assert.rejects(repository.hint(otherFamily, first.id), QuizNotFoundError);
+  const restarted = new QuizRepository(blobs);
+  const answers = await Promise.all([
+    restarted.answer(parent, first.id, item.generated.correctIndex),
+    restarted.answer(parent, first.id, item.generated.correctIndex),
+  ]);
+  assert.deepEqual(answers[0], answers[1]);
+  assert.equal(answers[0]!.correct, true);
+  assert.deepEqual((await restarted.state(parent, first.id)).answer, {
+    ...answers[0], answerIndex: item.generated.correctIndex,
+  });
+  assert.equal((await restarted.attempts(parent)).items.length, 1);
+  assert.deepEqual(await repository.recentQuestions(parent, input), []);
+  blobs.failWrites = true;
+  await assert.rejects(create());
+});
 
 test("preference enums and configured defaults reject partial, extra, or invalid choices", () => {
   assert.deepEqual(readPreferenceDefaults({ DEFAULT_APPEARANCE: "mint", DEFAULT_VOICE: "alternate", DEFAULT_MOOD: "calm" }), {

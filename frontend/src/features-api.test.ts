@@ -54,6 +54,17 @@ describe('backend roles, planning and preferences', () => {
 });
 
 describe('piano and quiz contracts', () => {
+  it('rejects leaked keys, duplicate library IDs and inconsistent restored answers', async () => {
+    const entry = { id: 'fixture', subject: 'Maths', level: 1, goal: 'A fixture goal', question: 'A fixture?' };
+    fetchMock.mockResolvedValueOnce(json({ version: 1, questions: [{ ...entry, correctIndex: 0 }] }));
+    await expect(api().library('en')).rejects.toThrow('API contract error');
+    fetchMock.mockResolvedValueOnce(json({ version: 1, questions: [entry, entry] }));
+    await expect(api().library('en')).rejects.toThrow('duplicate IDs');
+    fetchMock.mockResolvedValueOnce(json({ id: 'wrong-id', answer: null }));
+    await expect(api().quizState('quiz')).rejects.toThrow('inconsistent');
+    fetchMock.mockResolvedValueOnce(json({ id: 'quiz', answer: { answerIndex: 0, correct: true, correctIndex: 1, explanation: 'Fixture' } }));
+    await expect(api().quizState('quiz')).rejects.toThrow('inconsistent');
+  });
   it('uses only backend piano grading and traverses stored attempt pages', async () => {
     const attempt = { id: 'attempt-1', targetNote: 'C4', selectedNote: 'C4', correct: false, at };
     fetchMock.mockResolvedValueOnce(json({ correct: false }))
