@@ -85,7 +85,7 @@ describe('learning state', () => {
   it('keeps family access and calendar in separate admin sections', async () => {
     const api = {
       preferences: vi.fn().mockResolvedValue({ appearance: 'rose', voice: 'default', mood: 'gentle' }),
-      socialAccounts: vi.fn().mockResolvedValue([]), reminders: vi.fn().mockResolvedValue([]),
+      accessDirectory: vi.fn().mockResolvedValue({ accounts: [], requests: [] }), reminders: vi.fn().mockResolvedValue([]),
     };
     render(<Workspace api={api as unknown as Api} initialSessions={[]} language="en" setLanguage={vi.fn()} online role="admin" />);
     const configButton = screen.getByRole('button', { name: /Configuration/ });

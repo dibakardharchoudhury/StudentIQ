@@ -41,12 +41,22 @@ quiz and piano practice history continue to be saved by the backend as before.
 Changing subjects or language, starting a new session, or opening an old one
 asks before clearing an unsent question.
 
+**Design your learning companion** changes the teacher immediately from a short
+English or Bokmål prompt, for example `blue shirt, short hair and glasses`.
+Hair and shirt colours, hair length and glasses are supported in both the 3D
+avatar and its illustrated fallback. Unsupported requests or conflicting
+choices are reported without partially changing the avatar. This is local,
+bounded styling, not AI image generation: prompts are not sent to a provider or
+saved. Changes survive activity switching in this tab, but reset on page reload;
+saved appearance, voice and mood preferences remain separate.
+
 ### Family access and calendars
 
 Configuration separates **People & access** from **Calendar & reminders**.
-Account approval has a step-by-step identity check, a clear approved-account
-list, role changes, and confirmed removal. Backend administrator authorization
-is unchanged.
+Account approval uses an email-labelled, verified sign-in request, a clear
+approved-account list, role changes, and confirmed removal. Parents can optionally
+receive administrator rights; students cannot. Server-side authorization protects
+all access management and planning endpoints.
 
 External Google, Microsoft work/school and Microsoft personal calendars require
 separate read-only consent: signing into StudentIQ does not grant calendar access.
@@ -125,9 +135,10 @@ and data are protected independently.
 The existing work/school Entra identity remains the bootstrap administrator.
 Parents and learners do not need an account in that tenant: the administrator
 can separately approve a Google or Microsoft personal account as a parent or
-student. Both can access the shared learning history and tutoring features;
-neither can manage access or the server-protected planning endpoints. Do not
-give a child an administrator session.
+student. Both can access the shared learning history and tutoring features.
+Parents have no administrator rights by default; an administrator can optionally
+grant those rights to a parent. Only administrators can manage access or the
+server-protected planning endpoints. Do not give a child an administrator session.
 
 Social access is disabled until the administrator approves the exact provider
 subject (`sub`) in Configuration. A verified provider signature, issuer,
@@ -136,7 +147,7 @@ provider assertion is accepted once. Sessions expire after 30 minutes and are
 kept in browser memory only; signing out revokes the app session but does not
 necessarily sign out of Google or Microsoft. Requests and learning records
 continue to use the existing shared family history. Removing an account or
-changing its role immediately invalidates its existing sessions; re-approval
+changing its role or administrator rights immediately invalidates its existing sessions; re-approval
 does not reactivate old sessions.
 
 ### Approving an account
@@ -151,19 +162,25 @@ does not reactivate old sessions.
    resulting public client ID in both frontend `googleClientId` and API
    `GOOGLE_CLIENT_ID`. Publish the frontend. Follow Google's consent-screen and
    test-user requirements. Do not reuse another application's credentials.
-3. Under administrator supervision, sign in with the intended account. Until
-   approved, access is denied and the page displays its **unverified** setup
-   identifier. Confirm the selected account with the provider; never approve
-   an identifier supplied by an unknown person. Sign in as administrator in a
-   separate browser or device, open Configuration, and add the provider,
-   case-sensitive identifier and role under **Approved accounts → Add an
-   account**. The account ID is not an email address. The access list shows
-   each approved provider and role and lets the administrator change or remove
-   access. Do not put identifiers in Git, URLs, or logs. Each provider account
-   must be approved independently.
-4. Sign in again, confirm the approved account sees the shared history and
-   cannot access Configuration or the planning API, and confirm administrator
-   sign-in still works. Remove an entry in Configuration to revoke access.
+3. Sign in with the intended account. Until approved, access is denied and the
+   API records a request only after verifying the provider token. In a separate
+   browser/device, sign in as administrator, open **Configuration → People &
+   access**, refresh requests and select the person's request. You can enter
+   their email to locate a unique request. Confirm the account directly with the
+   person: provider email/username is a mutable label, never the authorization
+   identifier, and may differ from an alias they use. Approval binds to the
+   verified provider and immutable subject. Requests are eligible for 48 hours;
+   expired records are removed on later directory writes.
+4. Choose **Parent** or **Student** and approve. For a parent only, optionally
+   enable administrator rights and confirm the grant. This defaults off.
+   Existing parents can also be granted/revoked these rights from the list.
+   Each provider account must be approved separately.
+5. Sign in again using the normal personal-account button. Ordinary parents and
+   students cannot access Configuration or the planning API; parents explicitly
+   granted administrator rights can. The separate work/school administrator
+   button is for the original bootstrap administrator, whose account cannot be
+   removed from this list. Remove an entry to revoke access. Do not put account
+   identifiers in Git, URLs, or logs.
 
 Provider parental-consent rules may block a supervised child account until its
 parent permits third-party sign-in. Account approval is not a substitute for

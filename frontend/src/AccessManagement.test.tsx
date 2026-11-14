@@ -1,101 +1,136 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, expect, it, vi } from 'vitest';
 import AccessManagement from './AccessManagement';
 import { ApiError } from './api';
 
-const parent = { id: 'a'.repeat(64), provider: 'google' as const, subject: 'account-123', role: 'parent' as const };
-const student = { ...parent, role: 'student' as const };
+const request = { id: 'a'.repeat(64), provider: 'microsoft' as const, subject: 'account-123',
+  email: 'person@example.com', requestedAt: '2026-11-14T12:00:00Z' };
+const parent = { ...request, role: 'parent' as const, admin: false };
+const snapshot = (accounts = [] as typeof parent[], requests = [request]) => ({ accounts, requests });
+afterEach(() => vi.restoreAllMocks());
 
-it('guides approval using the exact provider and subject, then changes and removes access', async () => {
+it('accepts email and approves a signature-checked request with optional parent administrator rights', async () => {
   const api = {
-    socialAccounts: vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([parent]).mockResolvedValueOnce([student]).mockResolvedValueOnce([]),
-    saveSocialAccount: vi.fn().mockResolvedValue(undefined), removeSocialAccount: vi.fn().mockResolvedValue(undefined),
+    accessDirectory: vi.fn().mockResolvedValueOnce(snapshot()).mockResolvedValueOnce(snapshot([{ ...parent, admin: true }], [])),
+    saveSocialAccount: vi.fn().mockResolvedValue(undefined), removeSocialAccount: vi.fn(),
   };
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
   render(<AccessManagement api={api} language="en" online onAccessDenied={vi.fn()} />);
-  await screen.findByText('No accounts have been approved yet.');
-  expect(screen.getByText(/No invitation is sent/)).toBeVisible();
-  expect(screen.getByText(/account ID on the sign-in page is unverified/)).toBeVisible();
-  expect(screen.getByText(/Neither can manage access or the calendar/)).toBeVisible();
-  fireEvent.change(screen.getByLabelText('Sign-in provider'), { target: { value: 'google' } });
-  const input = screen.getByLabelText('Account ID') as HTMLInputElement;
-  fireEvent.change(input, { target: { value: 'person@example.com' } });
-  expect(input.checkValidity()).toBe(false);
-  fireEvent.change(input, { target: { value: 'account-123' } });
+  await screen.findByRole('button', { name: 'Use this request: person@example.com' });
+  const email = screen.getByLabelText('Email address') as HTMLInputElement;
+  fireEvent.change(email, { target: { value: 'person@example.com' } });
+  expect(email.checkValidity()).toBe(true);
+  expect(screen.getByLabelText('Sign-in request')).toHaveValue(request.id);
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'parent' } });
+  const admin = screen.getByRole('checkbox', { name: 'Give administrator rights (optional)' });
+  expect(admin).not.toBeChecked();
+  fireEvent.click(admin);
+  fireEvent.click(screen.getByRole('button', { name: 'Approve account' }));
+  await waitFor(() => expect(api.saveSocialAccount).toHaveBeenCalledWith({
+    provider: 'microsoft', requestId: request.id, email: 'person@example.com', role: 'parent', admin: true,
+  }, expect.any(AbortSignal)));
+  expect(confirm).toHaveBeenCalledOnce();
+  expect(await screen.findByText('Account approved. Ask the person to sign in again.')).toBeVisible();
+  expect(email).toHaveValue('');
+  expect(screen.getByText('Administrator', { selector: 'span' })).toBeVisible();
+});
+
+it('never grants rights from an email without a request or carries administrator rights into a student role', async () => {
+  const api = { accessDirectory: vi.fn().mockResolvedValue(snapshot()), saveSocialAccount: vi.fn(), removeSocialAccount: vi.fn() };
+  render(<AccessManagement api={api} language="en" online onAccessDenied={vi.fn()} />);
+  await screen.findByRole('button', { name: 'Use this request: person@example.com' });
+  fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'unknown@example.com' } });
+  expect(screen.getByRole('button', { name: 'Approve account' })).toBeDisabled();
+  expect(api.saveSocialAccount).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Use this request: person@example.com' }));
+  fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'parent' } });
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'student' } });
   fireEvent.click(screen.getByRole('button', { name: 'Approve account' }));
   await waitFor(() => expect(api.saveSocialAccount).toHaveBeenCalledWith(
-    { provider: 'google', subject: 'account-123', role: 'parent' }, expect.any(AbortSignal),
+    expect.objectContaining({ role: 'student', admin: false }), expect.any(AbortSignal),
   ));
-  expect(await screen.findByText('Account approved. Ask the person to sign in again.')).toBeVisible();
-  expect(input).toHaveValue('');
-  const account = within(screen.getByRole('region', { name: 'Approved accounts (1)' })).getByRole('listitem');
-  expect(within(account).getByText('Google')).toBeVisible();
-  expect(within(account).getByText('Parent')).toBeVisible();
-  expect(within(account).getByText('account-123')).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: /Change to student: Google · account-123/ }));
+});
+
+it('clears stale email matches and requires explicit selection for duplicate provider labels', async () => {
+  const duplicate = { ...request, id: 'b'.repeat(64), subject: 'another-account' };
+  const other = { ...request, id: 'c'.repeat(64), subject: 'unique-account', email: 'unique@example.com' };
+  const api = { accessDirectory: vi.fn().mockResolvedValue(snapshot([], [request, duplicate, other])),
+    saveSocialAccount: vi.fn(), removeSocialAccount: vi.fn() };
+  render(<AccessManagement api={api} language="en" online onAccessDenied={vi.fn()} />);
+  await screen.findByRole('button', { name: 'Use this request: unique@example.com' });
+  const email = screen.getByLabelText('Email address');
+  const selection = screen.getByLabelText('Sign-in request');
+  fireEvent.change(email, { target: { value: 'unique@example.com' } });
+  expect(selection).toHaveValue(other.id);
+  fireEvent.change(email, { target: { value: 'person@example.com' } });
+  expect(selection).toHaveValue('');
+  expect(screen.getByRole('button', { name: 'Approve account' })).toBeDisabled();
+  fireEvent.change(selection, { target: { value: duplicate.id } });
+  expect(screen.getByRole('button', { name: 'Approve account' })).toBeEnabled();
+  fireEvent.change(email, { target: { value: 'unknown@example.com' } });
+  expect(selection).toHaveValue('');
+  fireEvent.change(selection, { target: { value: other.id } });
+  expect(email).toHaveValue('unique@example.com');
+});
+
+it('lets an administrator grant, revoke, and remove parent access with explicit confirmation', async () => {
+  const api = {
+    accessDirectory: vi.fn().mockResolvedValueOnce(snapshot([parent], []))
+      .mockResolvedValueOnce(snapshot([{ ...parent, admin: true }], []))
+      .mockResolvedValueOnce(snapshot([parent], [])).mockResolvedValueOnce(snapshot([], [])),
+    saveSocialAccount: vi.fn().mockResolvedValue(undefined), removeSocialAccount: vi.fn().mockResolvedValue(undefined),
+  };
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  render(<AccessManagement api={api} language="en" online onAccessDenied={vi.fn()} />);
+  const grant = await screen.findByRole('button', { name: 'Give administrator rights: person@example.com' });
+  fireEvent.click(grant);
+  expect(api.saveSocialAccount).not.toHaveBeenCalled();
+  confirm.mockReturnValue(true);
+  fireEvent.click(grant);
   await waitFor(() => expect(api.saveSocialAccount).toHaveBeenCalledWith(
-    { provider: 'google', subject: 'account-123', role: 'student' }, expect.any(AbortSignal),
+    { provider: 'microsoft', subject: 'account-123', role: 'parent', admin: true }, expect.any(AbortSignal),
   ));
-  expect(await screen.findByText('Role updated. The person must sign in again.')).toBeVisible();
-  expect(screen.getByText('Student', { selector: 'span' })).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: /Remove access: Google · account-123/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove administrator rights: person@example.com' }));
+  await waitFor(() => expect(api.saveSocialAccount).toHaveBeenLastCalledWith(
+    { provider: 'microsoft', subject: 'account-123', role: 'parent', admin: false }, expect.any(AbortSignal),
+  ));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Remove access: person@example.com' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: 'Remove access: person@example.com' }));
   expect(api.removeSocialAccount).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-  expect(api.removeSocialAccount).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: /Remove access: Google · account-123/ }));
-  fireEvent.click(screen.getByRole('button', { name: /Confirm removal: Google · account-123/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm removal: person@example.com' }));
   await waitFor(() => expect(api.removeSocialAccount).toHaveBeenCalledWith(parent.id, expect.any(AbortSignal)));
   expect(await screen.findByText('Access removed.')).toBeVisible();
 });
 
-it('blocks changes after an uncertain mutation until a successful refresh', async () => {
+it('blocks changes after an uncertain mutation until a complete successful refresh', async () => {
   const api = {
-    socialAccounts: vi.fn().mockResolvedValueOnce([]).mockRejectedValueOnce(new Error('read failed')).mockResolvedValueOnce([parent]),
+    accessDirectory: vi.fn().mockResolvedValueOnce(snapshot()).mockRejectedValueOnce(new Error('read failed')).mockResolvedValueOnce(snapshot()),
     saveSocialAccount: vi.fn().mockResolvedValue(undefined), removeSocialAccount: vi.fn(),
   };
   render(<AccessManagement api={api} language="en" online onAccessDenied={vi.fn()} />);
-  await screen.findByText('No accounts have been approved yet.');
-  fireEvent.change(screen.getByLabelText('Account ID'), { target: { value: 'account-123' } });
+  fireEvent.click(await screen.findByRole('button', { name: 'Use this request: person@example.com' }));
   fireEvent.click(screen.getByRole('button', { name: 'Approve account' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('The change may have been saved');
-  expect(screen.getByLabelText('Account ID')).toHaveValue('account-123');
+  expect(screen.getByLabelText('Email address')).toHaveValue('person@example.com');
   expect(screen.getByRole('button', { name: 'Approve account' })).toBeDisabled();
-  expect(screen.queryByText(/Account approved/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Refresh list' }));
-  await screen.findByText('account-123');
-  expect(screen.getByRole('button', { name: 'Approve account' })).toBeEnabled();
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Approve account' })).toBeEnabled());
 });
 
-it('shows Norwegian loading, failure, offline and recovery states', async () => {
-  let rejectLoad!: (error: Error) => void;
-  const api = {
-    socialAccounts: vi.fn().mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectLoad = reject; })).mockResolvedValueOnce([]),
-    saveSocialAccount: vi.fn(), removeSocialAccount: vi.fn(),
-  };
-  const { rerender } = render(<AccessManagement api={api} language="nb" online onAccessDenied={vi.fn()} />);
-  expect(screen.getByText('Laster tilgangslisten…')).toBeVisible();
-  rejectLoad(new Error('network'));
-  expect(await screen.findByRole('alert')).toHaveTextContent('Kunne ikke laste tilgangslisten');
-  rerender(<AccessManagement api={api} language="nb" online={false} onAccessDenied={vi.fn()} />);
+it('shows localized failures and offline state, denies expired access, and aborts reads on unmount', async () => {
+  const denied = vi.fn();
+  const api = { accessDirectory: vi.fn().mockRejectedValue(new ApiError('Forbidden', 403)), saveSocialAccount: vi.fn(), removeSocialAccount: vi.fn() };
+  const view = render(<AccessManagement api={api} language="nb" online={false} onAccessDenied={denied} />);
   expect(screen.getByText(/Du er frakoblet/)).toBeVisible();
   expect(screen.getByRole('button', { name: 'Oppdater listen' })).toBeDisabled();
-  expect(screen.getByText(/Det sendes ingen invitasjon/)).toBeVisible();
-  expect(screen.getByText(/Konto-ID-en på innloggingssiden er ubekreftet/)).toBeVisible();
-  rerender(<AccessManagement api={api} language="nb" online onAccessDenied={vi.fn()} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Oppdater listen' }));
-  expect(await screen.findByText('Ingen kontoer er godkjent ennå.')).toBeVisible();
-});
-
-it('reports authorization failures and aborts in-flight requests on unmount', async () => {
-  const denied = vi.fn();
-  const api = { socialAccounts: vi.fn().mockRejectedValue(new ApiError('Forbidden', 403)), saveSocialAccount: vi.fn(), removeSocialAccount: vi.fn() };
-  const { unmount } = render(<AccessManagement api={api} language="en" online onAccessDenied={denied} />);
   await waitFor(() => expect(denied).toHaveBeenCalledOnce());
-  unmount();
-  const pending = { ...api, socialAccounts: vi.fn().mockImplementation(() => new Promise(() => {})) };
-  const view = render(<AccessManagement api={pending} language="en" online onAccessDenied={denied} />);
-  const signal = pending.socialAccounts.mock.calls[0][0] as AbortSignal;
-  expect(signal.aborted).toBe(false);
   view.unmount();
+  const pending = { ...api, accessDirectory: vi.fn().mockImplementation((_signal: AbortSignal) => new Promise(() => {})) };
+  const waiting = render(<AccessManagement api={pending} language="en" online onAccessDenied={denied} />);
+  const signal = pending.accessDirectory.mock.calls[0][0];
+  expect(signal.aborted).toBe(false);
+  waiting.unmount();
   expect(signal.aborted).toBe(true);
 });

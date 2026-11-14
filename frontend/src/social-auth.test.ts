@@ -25,7 +25,6 @@ describe('social sign-in', () => {
     const nonce = makeNonce();
     await auth.exchange('google', idToken, nonce);
     expect(await auth.token()).toBe(sessionToken);
-    expect(auth.identityForSetup()).toBeNull();
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ provider: 'google', idToken, nonce });
     await auth.signOut();
     expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe(`Bearer ${sessionToken}`);
@@ -33,11 +32,10 @@ describe('social sign-in', () => {
   });
 
   it('does not open a session when the backend rejects the account', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 403 })));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{"code":"approval_required"}', { status: 403 })));
     const auth = new ParentAuth(config);
     await auth.initialize();
-    await expect(auth.exchange('google', idToken, makeNonce())).rejects.toThrow('not been approved');
-    expect(auth.identityForSetup()).toEqual({ provider: 'google', subject: 'student-subject' });
+    await expect(auth.exchange('google', idToken, makeNonce())).rejects.toThrow('sign-in request was sent');
     await expect(auth.token()).rejects.toThrow();
   });
 });

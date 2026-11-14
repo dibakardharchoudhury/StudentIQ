@@ -18,6 +18,8 @@ import GentleCheckIn from './GentleCheckIn';
 import Quiz from './Quiz';
 import PracticeProgress from './PracticeProgress';
 import BuildStatus from './BuildStatus';
+import AvatarCustomizer from './AvatarCustomizer';
+import { defaultAvatar, type AvatarStyle } from './avatar-style';
 
 type Runtime = { auth: ParentAuth; api: Api; config: AppConfig };
 type InstallEvent = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> };
@@ -30,6 +32,7 @@ function message(error: unknown) {
 
 export default function App() {
   const [language, setLanguage] = useState<Language>('en');
+  const [avatarStyle, setAvatarStyle] = useState<AvatarStyle>(defaultAvatar);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
   const c = copy(language);
   const [runtime, setRuntime] = useState<Runtime>();
@@ -38,7 +41,6 @@ export default function App() {
   const [initialSessions, setInitialSessions] = useState<Session[] | null>(null);
   const [role, setRole] = useState<Role | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
-  const [setupIdentity, setSetupIdentity] = useState<{ provider: string; subject: string } | null>(null);
   const [lessonBusy, setLessonBusy] = useState(false);
   const [hasDraft, setHasDraft] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
@@ -88,7 +90,7 @@ export default function App() {
   async function signIn(action: (auth: ParentAuth) => Promise<void>, social = false) {
     if (!runtime || authLock.current) return;
     authLock.current = true;
-    setAuthBusy(true); setError(''); setSetupIdentity(null);
+    setAuthBusy(true); setError('');
     let signedIn = false;
     const controller = new AbortController();
     authRequest.current = controller;
@@ -103,14 +105,13 @@ export default function App() {
     } catch (error) {
       if (!controller.signal.aborted) {
         setError(signedIn || social ? message(error) : c.authError);
-        if (social && !signedIn) setSetupIdentity(runtime.auth.identityForSetup());
       }
       controller.abort();
     } finally { authLock.current = false; setAuthBusy(false); }
   }
   async function signOut() {
     if (!runtime || authLock.current) return;
-    setInitialSessions(null); setRole(null); setError(''); setPrivacy(false); setSetupIdentity(null); setHasDraft(false);
+    setInitialSessions(null); setRole(null); setError(''); setPrivacy(false); setHasDraft(false);
     authLock.current = true; setAuthBusy(true);
     try { await runtime.auth.signOut(); }
     catch { setError(c.logoutError); }
@@ -152,7 +153,7 @@ export default function App() {
     {!online && <div className="notice" role="status">{c.offline}</div>}
     {error && <ErrorBanner text={error} dismiss={() => setError('')} label={c.dismiss} />}
     {initialSessions !== null && runtime
-      ? <Workspace api={runtime.api} role={role ?? 'student'} initialSessions={initialSessions} language={language} setLanguage={setLanguage} online={online} onBusyChange={setLessonBusy} onDraftChange={setHasDraft} config={runtime.config} />
+      ? <Workspace api={runtime.api} role={role ?? 'student'} initialSessions={initialSessions} language={language} setLanguage={setLanguage} online={online} onBusyChange={setLessonBusy} onDraftChange={setHasDraft} config={runtime.config} avatarStyle={avatarStyle} onAvatarChange={setAvatarStyle} />
       : <main id="main" className="welcome-layout">
         <section className="welcome-copy">
           <p className="eyebrow">✦ {c.parent}</p>
@@ -167,25 +168,39 @@ export default function App() {
           {setupError ? <section className="setup-error" role="alert">
             <h2>{c.setup}</h2><p>{setupError}</p>
             <button onClick={() => setAttempt(value => value + 1)}>{c.retry}</button>
-          </section> : <button className="primary large" onClick={() => void signIn(auth => auth.signIn())} disabled={!runtime || authBusy || !online}>
-            {authBusy ? c.signingIn : !runtime ? c.loading : c.signIn}<span aria-hidden="true"> ↗</span>
-          </button>}
-          {runtime?.config.microsoftPersonalClientId && <p><button disabled={authBusy || !online}
-            onClick={() => void signIn(auth => auth.signInMicrosoft(), true)}>{c.microsoftStudent}</button></p>}
-          {runtime?.config.googleClientId && <GoogleSignIn clientId={runtime.config.googleClientId} language={language}
-            disabled={authBusy || !online}
-            onCredential={(token, nonce) => void signIn(auth => auth.exchange('google', token, nonce), true)} />}
-          {runtime && !runtime.config.googleClientId && <p className="small">{c.googleUnavailable}</p>}
-          {setupIdentity && <p className="small">{c.identitySetup} ({setupIdentity.provider}): <code>{setupIdentity.subject}</code></p>}
+          </section> : <section className="signin-options" aria-labelledby="signin-title">
+            <h2 id="signin-title">{c.signinTitle}</h2>
+            <p className="small">{c.signinHint}</p>
+            <div className="signin-family">
+              {runtime?.config.microsoftPersonalClientId && <button className="primary" disabled={authBusy || !online}
+                onClick={() => void signIn(auth => auth.signInMicrosoft(), true)}>{c.microsoftStudent}</button>}
+              {runtime?.config.googleClientId
+                ? <GoogleSignIn clientId={runtime.config.googleClientId} language={language} disabled={authBusy || !online}
+                  onCredential={(token, nonce) => void signIn(auth => auth.exchange('google', token, nonce), true)} />
+                : <div className="signin-unavailable"><button disabled aria-describedby="google-setup-note">{c.googleSignin}</button>
+                  <p className="small" id="google-setup-note">{c.googleUnavailable}</p>
+                  <details><summary>{c.googleSetupTitle}</summary><p className="small">{c.googleSetupHint}</p>
+                    <a href="https://console.cloud.google.com/auth/clients" target="_blank" rel="noreferrer">{c.googleSetupLink}</a>
+                  </details>
+                </div>}
+            </div>
+            <div className="signin-admin">
+              <h3>{c.adminSigninTitle}</h3><p className="small">{c.adminSigninHint}</p>
+              <button className="quiet" onClick={() => void signIn(auth => auth.signIn())} disabled={!runtime || authBusy || !online}>
+                {authBusy ? c.signingIn : !runtime ? c.loading : c.signIn}<span aria-hidden="true"> ↗</span>
+              </button>
+            </div>
+          </section>}
           {authBusy && <p className="small" role="status">{c.loadingHistory}</p>}
           <p className="small">{c.parentNote}</p>
           <div className="privacy-strip"><span aria-hidden="true">◇</span><p>{c.privateNote}</p></div>
         </section>
         <section className="welcome-teacher">
           <div className="teacher-bubble">{c.teacherHello}</div>
-          <Teacher speaking={false} label={c.teacherIdle} />
+          <Teacher speaking={false} label={c.teacherIdle} customization={avatarStyle} />
           <div className="welcome-sparkles" aria-hidden="true"><span>✦</span><span>✳</span><span>✧</span><span>♫</span></div>
           <p className="small">{c.teacherNote}</p>
+          <AvatarCustomizer value={avatarStyle} onChange={setAvatarStyle} language={language} disabled={authBusy} />
         </section>
       </main>}
     <footer>
@@ -209,14 +224,17 @@ export function ErrorBanner({ text, dismiss, label }: { text: string; dismiss():
     <button className="quiet" onClick={dismiss} aria-label={label}>×</button></div>;
 }
 
-export function Workspace({ api, initialSessions, language, setLanguage, online, onBusyChange, onDraftChange, role = 'student', config }: {
+export function Workspace({ api, initialSessions, language, setLanguage, online, onBusyChange, onDraftChange, role = 'student', config, avatarStyle, onAvatarChange }: {
   api: Api; initialSessions: Session[]; language: Language; setLanguage(language: Language): void; online: boolean;
   onBusyChange?(busy: boolean): void;
   onDraftChange?(hasDraft: boolean): void;
   role?: Role;
   config?: AppConfig;
+  avatarStyle?: AvatarStyle;
+  onAvatarChange?(style: AvatarStyle): void;
 }) {
   const c = copy(language);
+  const [localAvatarStyle, setLocalAvatarStyle] = useState<AvatarStyle>(defaultAvatar);
   const [view, setView] = useState<View>('learn');
   const [learningPane, setLearningPane] = useState<'mission' | 'talk' | 'explore'>('mission');
   const [mathActivity, setMathActivity] = useState<'array' | 'fraction'>('array');
@@ -507,7 +525,9 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
       <aside className="teacher-panel">
         <div className="panel-heading"><span className="eyebrow">StudentIQ</span><span className="live-dot">{c.ready}</span></div>
         <Teacher speaking={speaking} appearance={preferences?.appearance} mood={preferences?.mood}
-          label={speaking ? c.teacherSpeaking : c.teacherIdle} />
+          label={speaking ? c.teacherSpeaking : c.teacherIdle} customization={avatarStyle ?? localAvatarStyle} />
+        <AvatarCustomizer value={avatarStyle ?? localAvatarStyle} onChange={onAvatarChange ?? setLocalAvatarStyle}
+          language={language} disabled={disabled || toolBusy} />
         <p className="small teacher-note">{c.teacherNote}</p>
         <button type="button" className="talk-shortcut" disabled={disabled || toolBusy} onClick={() => {
           if (learningPane === 'talk') textarea.current?.focus();

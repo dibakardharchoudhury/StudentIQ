@@ -25,7 +25,20 @@ const socialAccountSchema = z.object({
   provider: z.enum(['google', 'microsoft']),
   subject: z.string().regex(/^[A-Za-z0-9_-]{1,255}$/),
   role: z.enum(['parent', 'student']),
+  admin: z.boolean().default(false),
+  email: z.string().email().max(254).optional(),
+}).refine(account => !account.admin || account.role === 'parent', 'Only parents can have administrator rights.');
+const accessRequestSchema = z.object({
+  id: z.string().regex(/^[a-f0-9]{64}$/), provider: z.enum(['google', 'microsoft']),
+  subject: z.string().regex(/^[A-Za-z0-9_-]{1,255}$/), email: z.string().email().max(254).optional(),
+  requestedAt: timestamp,
 });
+const accountInputSchema = z.union([
+  z.object({ provider: z.enum(['google', 'microsoft']), subject: z.string().regex(/^[A-Za-z0-9_-]{1,255}$/),
+    role: z.enum(['parent', 'student']), admin: z.boolean().optional() }).strict(),
+  z.object({ provider: z.enum(['google', 'microsoft']), requestId: z.string().regex(/^[a-f0-9]{64}$/),
+    email: z.string().trim().email().max(254), role: z.enum(['parent', 'student']), admin: z.boolean().optional() }).strict(),
+]).refine(account => !account.admin || account.role === 'parent', 'Only parents can have administrator rights.');
 const reminderSchema = z.object({
   id, title: z.string().min(1), date: z.iso.date(), completed: z.boolean(),
 });
@@ -64,6 +77,8 @@ export type ChatInput = { sessionId?: string; subject: string; language: Languag
 export type SpeechToken = z.infer<typeof speechSchema>;
 export type Role = z.infer<typeof meSchema>['role'];
 export type SocialAccount = z.infer<typeof socialAccountSchema>;
+export type SocialAccessRequest = z.infer<typeof accessRequestSchema>;
+export type SocialAccountInput = z.infer<typeof accountInputSchema>;
 export type Reminder = z.infer<typeof reminderSchema>;
 export type ReminderInput = Pick<Reminder, 'title' | 'date'> | Reminder;
 export type PianoNote = typeof pianoNotes[number];
@@ -195,9 +210,18 @@ export class Api {
     }
     return result.accounts;
   }
-  async saveSocialAccount(input: Omit<SocialAccount, 'id'>, signal?: AbortSignal) {
-    const result = socialAccountSchema.omit({ id: true }).safeParse(input);
-    if (!result.success) throw new ApiError('Enter a valid account identifier.');
+  async accessDirectory(signal?: AbortSignal) {
+    const result = await this.request('/api/access/accounts', z.object({
+      accounts: z.array(socialAccountSchema).max(20), requests: z.array(accessRequestSchema).max(50),
+    }), signal);
+    for (const rows of [result.accounts, result.requests]) {
+      if (new Set(rows.map(row => row.id)).size !== rows.length) throw new ApiError('API contract error: duplicate accounts or requests.');
+    }
+    return result;
+  }
+  async saveSocialAccount(input: SocialAccountInput, signal?: AbortSignal) {
+    const result = accountInputSchema.safeParse(input);
+    if (!result.success) throw new ApiError('Enter a valid email and choose a sign-in request. Administrator rights are available only for parents.');
     await this.response('/api/access/accounts', 'POST', signal, result.data);
   }
   async removeSocialAccount(accountId: string, signal?: AbortSignal) {

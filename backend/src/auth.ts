@@ -18,6 +18,7 @@ export interface AuthConfig {
 export type UserRole = "admin" | "parent" | "student";
 export const SOCIAL_STUDENT = "social-student";
 export const SOCIAL_PARENT = "social-parent";
+export const SOCIAL_ADMIN = "social-admin";
 const CONSUMER_TENANT = "9188040d-6c67-4c5b-b112-36a304b66dad";
 const MICROSOFT_ISSUER = `https://login.microsoftonline.com/${CONSUMER_TENANT}/v2.0`;
 const googleKeys = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
@@ -30,6 +31,7 @@ export function roleForOid(oid: string, config: AuthConfig): UserRole {
   if (normalized === config.parentOid.toLowerCase()) return "admin";
   if (normalized === SOCIAL_STUDENT) return "student";
   if (normalized === SOCIAL_PARENT) return "parent";
+  if (normalized === SOCIAL_ADMIN) return "admin";
   if (config.studentOid && normalized === config.studentOid.toLowerCase()) return "student";
   throw new AuthenticationError(403);
 }

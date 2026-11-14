@@ -59,8 +59,9 @@ CORS response. Do not configure `*`.
 Use the v2 API access token for this API, not an ID token. Tokens are verified
 against `https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys`;
 issuer, audience, expiry, tenant, delegated scope, and exact parent object ID
-or explicitly configured student object ID are enforced. No identity outside
-that allowlist is accepted. A request may include an `Idempotency-Key` (8–128 safe ASCII
+or explicitly configured student object ID are enforced. Separately approved
+Google and Microsoft personal identities use the social exchange below.
+A request may include an `Idempotency-Key` (8–128 safe ASCII
 characters) to make chat retries replay-safe. Supplying this header before the
 first attempt is recommended, including for network timeouts.
 
@@ -70,22 +71,59 @@ first attempt is recommended, including for network timeouts.
 be a distinct, valid Entra object ID in the same tenant. The same strict JWT,
 issuer, audience, expiry, and delegated scope checks apply to both identities;
 roles come only from the verified allowlisted `oid`, never client headers or
-token `roles` claims. Admin routes require the admin identity on every operation.
+token `roles` claims. Admin routes require administrator authorization on every operation.
 
-When `ENTRA_STUDENT_OID` is omitted/blank, only the admin can sign in. This
-project does not provision identities or imply that a child-usable account
-exists. Configure the separate identity, application access, scope consent,
-and tenant/parent policies yourself before enabling it.
+When `ENTRA_STUDENT_OID` is omitted/blank, only the bootstrap admin can use the
+tenant sign-in flow. Personal-account approval is independent of that tenant
+allowlist. This project does not provision provider identities or bypass
+parental consent; configure application access and consent before enabling them.
 
-Both authorized roles share tutoring, history, piano/quiz evidence,
+All authorized roles share tutoring, history, piano/quiz evidence,
 preferences, and one quota pool under `parents/{ENTRA_PARENT_OID}/`. No
-student-specific data prefix or second allowance is created. Only the admin
-can read/write calendar reminders; students receive 403 on all admin routes.
+student-specific data prefix or second allowance is created. Only administrators
+can read/write calendar reminders or manage account access. Ordinary parents
+and students receive 403 on all admin routes.
+
+### Personal-account approval
+
+`GOOGLE_CLIENT_ID` and/or `MICROSOFT_PERSONAL_CLIENT_ID` must match the respective
+frontend public client IDs. Google requires a separate Google Cloud OAuth web
+client; an Azure registration is not a Google client. Neither flow needs a
+client secret in the browser.
+
+`POST /api/social/session` accepts exactly `{provider, idToken, nonce}`. Provider
+signature, issuer, audience, expiry, nonce and freshness are checked; Google
+also requires verified email, and Microsoft requires the consumer tenant and
+v2 issuer. Each assertion is accepted once. An unapproved identity records a
+pending request durably and receives 403 with `code: "approval_required"`,
+never a learning session. A storage failure is an error, not confirmation
+that a request was recorded. Approved identities receive opaque, revocable,
+30-minute sessions. `POST /api/social/logout` revokes the app session.
+
+Admin-only `GET /api/access/accounts` returns `{accounts, requests}` from one
+directory snapshot. Approve using `POST /api/access/accounts` with
+`{provider, requestId, email, role: "parent"|"student", admin?: boolean}`.
+Email is a bounded display label; authorization binds to the selected
+signature-checked provider subject, not the email. Confirm the person directly
+before selecting their request. Missing/expired requests return 409. Requests
+are eligible for 48 hours, limited to 50, and cleaned up on later writes.
+
+Parent administrator rights are optional and default false. Students cannot
+be granted those rights. Updating an existing approval retains the compatible
+`{provider, subject, role, admin?}` input; `DELETE /api/access/accounts/{id}`
+removes it. At most 20 accounts can be approved. Role/admin changes replace the
+account revision, immediately invalidating prior sessions; re-granting rights
+does not revive them. Existing version-1 directories migrate with admin off
+without losing identities or revisions. Conditional writes prevent concurrent
+requests/approvals from overwriting one another. The bootstrap admin is not a
+removable social-directory entry.
 
 ## Routes
 
 * `GET /api/health` — unauthenticated liveness response.
-* `GET /api/me` — `{ "role": "admin" | "student" }`.
+* `GET /api/me` — `{ "role": "admin" | "parent" | "student" }`, including explicitly granted parent administrators as `admin`.
+* `POST /api/social/session`, `POST /api/social/logout` — personal-account exchange and revocation, described above.
+* `GET /api/access/accounts`, `POST /api/access/accounts`, `DELETE /api/access/accounts/{id}` — administrator-only access management.
 * `GET /api/preferences` and `PUT /api/preferences` — the preferences object described below.
 * `GET /api/planning/reminders`, `POST /api/planning/reminders`, `DELETE /api/planning/reminders/{id}` — admin-only manual planning. The `admin` route prefix is reserved by Azure Functions.
 * `POST /api/practice/piano` and `GET /api/practice/piano` — recorded note-identification practice.
@@ -102,8 +140,8 @@ can read/write calendar reminders; students receive 403 on all admin routes.
   configuration or identity/token failures fail closed. Local Speech calls
   require an environment supporting the configured managed identity.
 
-All routes except health and browser CORS preflight require authenticated
-family access. The exact configured origin is allowed GET/POST/PUT/DELETE;
+All routes except health, the signature-verified provider exchange, and browser
+CORS preflight require authenticated family access. The exact configured origin is allowed GET/POST/PUT/DELETE;
 platform CORS must use the same origin. Responses use `Cache-Control: no-store`.
 
 ### Shared preferences and teaching tone

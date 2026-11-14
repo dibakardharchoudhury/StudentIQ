@@ -12,7 +12,7 @@ import { PianoRepository } from "../src/piano.js";
 import { PreferencesRepository } from "../src/preferences.js";
 import { QuizRepository } from "../src/quiz.js";
 import { SocialDirectory } from "../src/social-directory.js";
-import { SOCIAL_PARENT, SOCIAL_STUDENT } from "../src/auth.js";
+import { SOCIAL_ADMIN, SOCIAL_PARENT, SOCIAL_STUDENT } from "../src/auth.js";
 
 class MemoryBlobStore implements JsonBlobStore {
   private readonly values = new Map<string, { value: unknown; etag: string }>();
@@ -125,6 +125,21 @@ test("only the administrator can approve, list, or revoke parent and student acc
   deps.authorize = async () => config.parentOid;
   assert.equal((await dispatch(remove, operations.removeAccount, deps, { adminOnly: true })).status, 200);
   assert.equal((await deps.socialDirectory!.list()).length, 0);
+});
+
+test("an explicitly granted social administrator can manage access and planning, but a parent cannot self-promote", async () => {
+  const operations = createOperations();
+  const deps = dependencies(async () => SOCIAL_PARENT);
+  const body = JSON.stringify({ provider: "microsoft", subject: "parent-subject", role: "parent", admin: true });
+  const requestBody = () => request("access/accounts", { method: "POST", body });
+  assert.equal((await dispatch(requestBody(), operations.saveAccount, deps, { adminOnly: true })).status, 403);
+  deps.authorize = async () => SOCIAL_ADMIN;
+  assert.equal((await dispatch(requestBody(), operations.saveAccount, deps, { adminOnly: true })).status, 200);
+  const access = await dispatch(request("access/accounts"), operations.listAccounts, deps, { adminOnly: true });
+  assert.equal(access.status, 200);
+  assert.deepEqual((access.jsonBody as { requests: unknown[] }).requests, []);
+  assert.equal((await dispatch(request("planning/reminders"), operations.listReminders, deps, { adminOnly: true })).status, 200);
+  assert.deepEqual((await dispatch(request("me"), operations.me, deps)).jsonBody, { role: "admin" });
 });
 
 test("Speech response preserves contract and no-store, and cannot bypass parent authorization", async () => {

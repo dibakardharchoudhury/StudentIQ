@@ -2,6 +2,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import type { Camera, Mesh, MeshStandardMaterial, Scene } from 'three';
 import Teacher from './Teacher';
+import { defaultAvatar } from './avatar-style';
 
 const state = vi.hoisted(() => ({
   unavailable: true,
@@ -84,6 +85,26 @@ it('shows the human fallback immediately, before the asynchronous renderer can l
   expect(container.querySelector('.teacher-canvas')).toHaveAttribute('hidden');
   expect(state.renderers).toHaveLength(0);
   unmount();
+});
+
+it('updates the live renderer and illustrated fallback together when the child changes style', async () => {
+  state.unavailable = false;
+  const view = render(<Teacher speaking={false} label="Learning companion" />);
+  await waitFor(() => expect(state.renderers).toHaveLength(1));
+  const previous = state.renderers[0];
+  view.rerender(<Teacher speaking={false} label="Learning companion"
+    customization={{ ...defaultAvatar, shirt: 'blue', hair: 'purple', hairLength: 'short', glasses: true }} />);
+  await waitFor(() => expect(state.renderers).toHaveLength(2));
+  expect(previous.dispose).toHaveBeenCalledOnce();
+  const scene = state.renderers[1].render.mock.calls[0][0] as Scene;
+  const teacher = scene.children.find(child => child.type === 'Group')!;
+  const cardigan = teacher.children[0] as Mesh;
+  const color = (cardigan.material as MeshStandardMaterial).color;
+  expect(color.b).toBeGreaterThan(color.r);
+  act(() => state.renderers[1].domElement.dispatchEvent(new Event('webglcontextlost', { cancelable: true })));
+  expect(view.container.querySelector('.teacher-fallback svg g[fill="#386eb0"]')).toBeInTheDocument();
+  expect(view.container.querySelector('.teacher-fallback svg g[fill="#7352bc"]')).toBeInTheDocument();
+  expect(view.container.querySelectorAll('.teacher-fallback svg g[fill="none"] circle')).toHaveLength(2);
 });
 
 it('shows a human illustration with an accessible label when WebGL is unavailable', async () => {

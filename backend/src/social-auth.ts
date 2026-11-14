@@ -1,8 +1,12 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { JWTVerifyGetKey } from "jose";
-import { AuthenticationError, bearerFromHeader, SOCIAL_PARENT, SOCIAL_STUDENT, verifySocialToken, type AuthConfig } from "./auth.js";
+import { AuthenticationError, bearerFromHeader, SOCIAL_ADMIN, SOCIAL_PARENT, SOCIAL_STUDENT, verifySocialToken, type AuthConfig } from "./auth.js";
 import type { JsonBlobStore } from "./contracts.js";
-import type { SocialDirectory, SocialRole } from "./social-directory.js";
+import { emailLabel, type SocialDirectory, type SocialRole } from "./social-directory.js";
+
+export class ApprovalRequiredError extends AuthenticationError {
+  constructor() { super(403); }
+}
 
 type Provider = "google" | "microsoft";
 interface Session {
@@ -10,6 +14,7 @@ interface Session {
   subject: string;
   clientId: string;
   role: SocialRole;
+  admin?: boolean;
   revision: string;
   expiresAt: number;
   revoked: boolean;
@@ -31,18 +36,22 @@ export class SocialAuth {
       throw new AuthenticationError(401);
     }
     const payload = await verifySocialToken(body.idToken, body.provider, config, body.nonce, keys);
-    const account = (await this.directory.list()).find(item =>
-      item.provider === body.provider && item.subject === payload.sub);
-    if (!account) throw new AuthenticationError(403);
     if (!await this.blobs.create(`social-auth/used/${digest(body.idToken)}`, { used: true })) {
       throw new AuthenticationError(401);
+    }
+    const account = (await this.directory.list()).find(item =>
+      item.provider === body.provider && item.subject === payload.sub);
+    if (!account) {
+      const email = emailLabel(payload.email) ?? emailLabel(payload.preferred_username);
+      await this.directory.request(body.provider, payload.sub!, email);
+      throw new ApprovalRequiredError();
     }
     const token = `s1.${randomBytes(32).toString("base64url")}`;
     const expiresAt = Date.now() + 30 * 60 * 1000;
     const clientId = body.provider === "google" ? config.googleClientId : config.microsoftClientId;
     if (!clientId) throw new AuthenticationError(403);
     const session: Session = {
-      provider: body.provider, subject: payload.sub!, clientId, role: account.role,
+      provider: body.provider, subject: payload.sub!, clientId, role: account.role, admin: account.admin,
       revision: account.revision, expiresAt, revoked: false
     };
     if (!await this.blobs.create(`social-auth/sessions/${digest(token)}`, session)) {
@@ -60,11 +69,12 @@ export class SocialAuth {
     const clientId = stored.value.provider === "google" ? config.googleClientId
       : stored.value.provider === "microsoft" ? config.microsoftClientId : undefined;
     const approved = (await this.directory.list()).some(item => item.provider === stored.value.provider &&
-      item.subject === stored.value.subject && item.role === stored.value.role && item.revision === stored.value.revision);
+      item.subject === stored.value.subject && item.role === stored.value.role && item.revision === stored.value.revision &&
+      item.admin === (stored.value.admin ?? false));
     if (!approved || !clientId || stored.value.clientId !== clientId) {
       throw new AuthenticationError(403);
     }
-    return stored.value.role === "parent" ? SOCIAL_PARENT : SOCIAL_STUDENT;
+    return stored.value.role === "parent" ? stored.value.admin ? SOCIAL_ADMIN : SOCIAL_PARENT : SOCIAL_STUDENT;
   }
 
   async revoke(authorization: string | null): Promise<void> {

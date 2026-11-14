@@ -32,6 +32,14 @@ p { margin-bottom: 16px; }
 .welcome-layout { min-height: 670px; display: grid; grid-template-columns: 1.1fr 1fr; align-items: center; gap: clamp(32px, 5vw, 72px); padding: 56px 32px; }
 .welcome-copy h1 { font-size: clamp(2.4rem, 4.5vw, 4rem); max-width: 560px; }
 .welcome-copy > .small { margin-top: 12px; }
+.signin-options { display: grid; gap: 16px; margin-top: 24px; max-width: 520px; }
+.signin-options h2, .signin-options h3, .signin-options p { margin: 0; }
+.signin-options h3 { font-size: .875rem; }
+.signin-family { display: grid; gap: 16px; }
+.signin-family > button, .signin-unavailable > button { width: 100%; min-height: 48px; padding: 12px 16px; white-space: normal; }
+.signin-unavailable { display: grid; gap: 8px; }
+.signin-unavailable details { font-size: .8125rem; }
+.signin-admin { display: grid; justify-items: start; gap: 10px; padding-top: 20px; border-top: 1px solid var(--cp-border); }
 .welcome-steps { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 0; }
 .welcome-steps span { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--cp-border); border-radius: .625rem; background: var(--cp-surface); font-size: .8125rem; font-weight: 600; }
 .welcome-steps strong { color: var(--cp-accent); font-size: 1.1rem; }
@@ -102,6 +110,14 @@ summary:focus-visible { outline: 3px solid var(--cp-accent); outline-offset: 4px
 .teacher-settings form { display: flex; flex-direction: column; gap: 12px; }
 .teacher-settings label { display: flex; flex-direction: column; gap: 4px; font-size: .8125rem; }
 .teacher-settings .error-banner { font-size: .8125rem; }
+.avatar-customizer { text-align: left; margin-top: 16px; border-top: 1px solid var(--cp-border); padding-top: 8px; }
+.avatar-customizer form { display: grid; gap: 10px; }
+.avatar-customizer label { display: grid; gap: 6px; font-size: .875rem; font-weight: 600; }
+.avatar-customizer input { width: 100%; min-width: 0; min-height: 44px; padding: 8px 10px; border: 1px solid var(--cp-border-strong); border-radius: .625rem; background: var(--cp-surface); color: var(--cp-text); }
+.avatar-customizer p { margin: 0 0 8px; font-size: .8125rem; }
+.avatar-customizer form > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.avatar-customizer [role="alert"] { color: var(--cp-danger); margin-top: 12px; }
+.avatar-customizer [role="status"] { margin-top: 12px; }
 .check-in { margin-top: 16px; border-top: 1px solid var(--cp-border); padding-top: 12px; }
 .check-in > .small { margin: 8px 0 0; }
 .check-in .notice button { margin: 4px 8px 4px 0; }
@@ -372,6 +388,7 @@ footer > .small { flex-basis: 100%; font-size: .6875rem; }
   .teacher-panel .voice-toggle { max-width: 240px; }
   .teacher-settings { grid-column: 2; margin: 0; padding: 0; border: 0; }
   .teacher-settings > .small { margin: 0; }
+  .teacher-panel .avatar-customizer { grid-column: 1 / -1; margin-top: 0; }
   .workspace-nav { gap: 4px; margin-bottom: 16px; }
   .workspace-nav button { min-width: 0; flex: 1 1 0; padding: 8px 4px; white-space: nowrap; font-size: .75rem; }
   .workspace-nav button span { display: none; }

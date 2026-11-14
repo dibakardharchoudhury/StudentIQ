@@ -11,7 +11,6 @@ export class ParentAuth {
   private socialToken: string | null = null;
   private socialExpires = 0;
   private apiBaseUrl: string;
-  private pendingIdentity: { provider: string; subject: string } | null = null;
   private scopes: string[];
   constructor(config: AppConfig) {
     this.apiBaseUrl = config.apiBaseUrl;
@@ -47,9 +46,7 @@ export class ParentAuth {
     await this.client.initialize();
     if (this.personal) await this.personal.initialize();
   }
-  identityForSetup() { return this.pendingIdentity; }
   async signIn() {
-    this.pendingIdentity = null;
     this.socialToken = null;
     this.socialExpires = 0;
     const result = await this.client.loginPopup({ scopes: this.scopes, prompt: 'select_account' });
@@ -59,7 +56,6 @@ export class ParentAuth {
   }
   async signInMicrosoft() {
     if (!this.personal) throw new Error('Microsoft personal sign-in is not configured.');
-    this.pendingIdentity = null;
     const nonce = makeNonce();
     const result = await this.personal.loginPopup({ scopes: ['openid', 'profile', 'email'], prompt: 'select_account', nonce });
     await this.exchange('microsoft', result.idToken, nonce);
@@ -67,16 +63,23 @@ export class ParentAuth {
   async exchange(provider: 'google' | 'microsoft', idToken: string, nonce: string) {
     this.account = null;
     this.client.setActiveAccount(null);
-    this.pendingIdentity = null;
-    this.pendingIdentity = { provider, subject: readSubject(idToken) };
+    this.socialToken = null;
+    this.socialExpires = 0;
     const response = await fetch(`${this.apiBaseUrl}/api/social/session`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ provider, idToken, nonce }),
       cache: 'no-store', credentials: 'omit', redirect: 'error',
     });
-    if (!response.ok) throw new Error(response.status === 403
-      ? 'This account has not been approved by the parent.'
-      : 'Social sign-in could not be verified. Please try again.');
+    if (!response.ok) {
+      if (response.status === 403) {
+        const body: unknown = await response.json();
+        if (body && typeof body === 'object' && 'code' in body && body.code === 'approval_required') {
+          throw new Error('Your sign-in request was sent to the administrator. Ask them to approve your account in People & access, then sign in again.');
+        }
+        throw new Error('This account is not allowed. Ask the administrator to check your access and the sign-in configuration.');
+      }
+      throw new Error('Social sign-in could not be verified. Please try again.');
+    }
     const value: unknown = await response.json();
     if (!value || typeof value !== 'object' || !('token' in value) || !('expiresAt' in value) ||
         typeof value.token !== 'string' || !/^s1\.[A-Za-z0-9_-]{43}$/.test(value.token) ||
@@ -85,7 +88,6 @@ export class ParentAuth {
     }
     this.socialToken = value.token;
     this.socialExpires = Date.parse(value.expiresAt);
-    this.pendingIdentity = null;
   }
   async token() {
     if (this.socialToken) {
@@ -104,7 +106,6 @@ export class ParentAuth {
     }
   }
   async signOut() {
-    this.pendingIdentity = null;
     if (this.socialToken) {
       const token = this.socialToken;
       this.socialToken = null;
@@ -129,22 +130,8 @@ export class ParentAuth {
       });
     }
   }
-
 }
 
 export function makeNonce() {
   return Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join('');
-}
-
-function readSubject(token: string): string {
-  const part = token.split('.')[1];
-  if (!part) throw new Error('Sign-in returned an invalid identity token.');
-  try {
-    const payload: unknown = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/')));
-    if (payload && typeof payload === 'object' && 'sub' in payload &&
-        typeof payload.sub === 'string' && /^[A-Za-z0-9_-]{1,255}$/.test(payload.sub)) return payload.sub;
-  } catch {
-    throw new Error('Sign-in returned an invalid identity token.');
-  }
-  throw new Error('Sign-in returned no usable account identifier.');
 }

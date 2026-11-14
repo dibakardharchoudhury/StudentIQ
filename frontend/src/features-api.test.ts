@@ -10,6 +10,14 @@ beforeEach(() => { vi.stubGlobal('fetch', fetchMock); fetchMock.mockReset(); });
 afterEach(() => vi.unstubAllGlobals());
 
 describe('backend roles, planning and preferences', () => {
+  it('binds email approval to a selected request and refuses student administrator grants', async () => {
+    const input = { provider: 'microsoft' as const, requestId: 'a'.repeat(64), email: 'person@example.com', role: 'parent' as const, admin: true };
+    fetchMock.mockResolvedValue(new Response('{}'));
+    await api().saveSocialAccount(input);
+    expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).toEqual(input);
+    await expect(api().saveSocialAccount({ ...input, role: 'student' })).rejects.toThrow('Administrator rights');
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
   it('validates roles and never infers admin from an unknown role', async () => {
     fetchMock.mockResolvedValueOnce(json({ role: 'admin' })).mockResolvedValueOnce(json({ role: 'owner' }));
     expect(await api().me()).toEqual({ role: 'admin' });

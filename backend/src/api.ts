@@ -29,8 +29,8 @@ import {
 } from "./reminders.js";
 import { PianoRepository, validatePianoInput } from "./piano.js";
 import { PreferencesRepository } from "./preferences.js";
-import type { SocialAuth } from "./social-auth.js";
-import type { SocialDirectory } from "./social-directory.js";
+import { ApprovalRequiredError, type SocialAuth } from "./social-auth.js";
+import { AccessRequestError, type SocialDirectory } from "./social-directory.js";
 import { chooseLearningTopic } from "./curriculum.js";
 import {
   QuizRepository, QuizAnswerConflictError, QuizDuplicateError, QuizNotFoundError,
@@ -176,7 +176,11 @@ export async function dispatch(
     return { ...response, headers: { ...headers, ...(response.headers ?? {}) } };
   } catch (error) {
     let response: HttpResponseInit;
-    if (error instanceof AuthenticationError) {
+    if (error instanceof ApprovalRequiredError) {
+      response = json(403, { error: "Administrator approval is required. A sign-in request has been recorded.", code: "approval_required" });
+    } else if (error instanceof AccessRequestError) {
+      response = json(409, { error: error.message });
+    } else if (error instanceof AuthenticationError) {
       response = json(error.status, { error: error.status === 401 ? "Unauthorized." : "Forbidden." });
     } else if (error instanceof InputValidationError) {
       response = json(400, { error: "Invalid request." });
@@ -242,7 +246,7 @@ export function createOperations() {
   const listAccounts: Operation = async (_request, principalOid, { socialDirectory, config }) => {
     requireAdmin(principalOid, config);
     if (!socialDirectory) throw new Error("Access directory is unavailable.");
-    return json(200, { accounts: await socialDirectory.list() });
+    return json(200, await socialDirectory.snapshot());
   };
   const saveAccount: Operation = async (request, principalOid, { socialDirectory, config }) => {
     requireAdmin(principalOid, config);
