@@ -7,6 +7,8 @@ it('applies combined English and Norwegian prompts without changing unrelated fe
   const blue = applyAvatarPrompt('Please give my teacher short blue hair and a purple shirt with glasses', defaultAvatar);
   expect(blue).toEqual({ hair: 'blue', hairLength: 'short', shirt: 'purple', glasses: true });
   expect(applyAvatarPrompt('grønn genser og uten briller', blue)).toEqual({ ...blue, shirt: 'green', glasses: false });
+  expect(applyAvatarPrompt('rosa genser, kort blått hår og briller', defaultAvatar))
+    .toEqual({ hair: 'blue', hairLength: 'short', shirt: 'pink', glasses: true });
   expect(applyAvatarPrompt('nullstill', blue)).toEqual(defaultAvatar);
 });
 

@@ -12,6 +12,7 @@ const colors: Record<string, AvatarColor> = {
   yellow: 'yellow', green: 'green', blue: 'blue', purple: 'purple', pink: 'pink', teal: 'teal',
   brun: 'brown', svart: 'black', blond: 'blonde', hvit: 'white', rød: 'red', oransje: 'orange',
   gul: 'yellow', grønn: 'green', blå: 'blue', lilla: 'purple', rosa: 'pink', turkis: 'teal',
+  brunt: 'brown', blondt: 'blonde', hvitt: 'white', rødt: 'red', gult: 'yellow', grønt: 'green', blått: 'blue',
 };
 
 export class AvatarPromptError extends Error {
