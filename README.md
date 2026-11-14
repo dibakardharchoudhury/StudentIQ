@@ -37,18 +37,39 @@ quiz and piano practice history continue to be saved by the backend as before.
 Changing subjects or language, starting a new session, or opening an old one
 asks before clearing an unsent question.
 
-Visual missions are optional AI-generated four-choice questions with playful
-stories and bounded visual clues. Maths uses arrays or fraction bars; other
-supported subjects use labelled cards, not generated maps or images. When
-voice is enabled the avatar reads the question and explanation, and the learner
+Visual missions are optional AI-generated mini-lessons with an introductory
+idea, a question, four choices and bounded visual clues. Maths rotates between
+equal-group arrays, fraction bars and 0–10 number lines; the backend checks
+the numerical answer against each picture. Other supported subjects use labelled
+cards, not generated maps or images. When voice is enabled the avatar reads
+the introduction, question and explanation, and the learner
 can replay, request a hint or skip. A question is stored when generated; an
-answer is stored only when submitted. Recent questions and maths visual layouts
-reduce repetition, and bounded previous conversation notes can guide the topic;
-neither guarantees mastery or novelty. The service checks maths visual answers
-against the picture, but AI content can still be wrong. Live current-affairs
+answer is stored only when submitted. The next topic is chosen automatically
+from a small subject-specific rotation using recent saved mission topics; recent
+questions, pictures and bounded conversation notes reduce repetition. They do
+not prove learning, ensure a personalized sequence, or guarantee novelty.
+Starting a mission or choosing the next one is an explicit action; there are no
+background model calls. AI content can still be wrong. Live current-affairs
 missions are unavailable without a verified source. Each mission makes a model
 call and voice narration uses Speech; both may incur charges and are subject
 to the existing quotas.
+
+### Curriculum scope
+
+The topic rotation is a small, locally curated starting point for an
+approximately ten-year-old, inspired by broad Norwegian primary-school subject
+themes and inquiry-led learning. Useful public references include the
+[Norwegian mathematics](https://www.udir.no/lk20/mat01-06),
+[science](https://www.udir.no/lk20/nat01-05) and
+[social studies](https://www.udir.no/lk20/saf01-05) curricula and the
+[IB Primary Years Programme](https://www.ibo.org/programmes/primary-years-programme/curriculum/)
+framework. Schools choose their own IB units; Norwegian goals span year bands.
+This is not an official, endorsed or complete IB or LK20 curriculum mapping,
+and generated lessons have not been independently reviewed by teachers.
+Parents should compare topics with the child's actual school plan. Maths
+missions currently cover only the three visual exercise types described above.
+Deploy the backend before the frontend: older clients omit the number-line
+capability and receive only visuals they understand.
 
 The deployed Azure resources are in `rg-studentiq-20261113` in Norway East.
 The Entra application registration is a tenant-level directory object and cannot

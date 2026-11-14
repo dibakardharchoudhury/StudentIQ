@@ -660,7 +660,7 @@ test("quiz creation hides the key; either family role can submit one real, durab
   }), ops.createQuiz, deps);
   assert.equal(created.status, 200);
   const body = created.jsonBody as { id: string; question: string; options: string[] };
-  assert.deepEqual(Object.keys(body).sort(), ["id", "options", "question"]);
+  assert.deepEqual(Object.keys(body).sort(), ["id", "options", "question", "topic"]);
   assert.equal(body.options.length, 4);
   deps.authorize = async () => deps.config.studentOid!;
   const answerRequest = (answerIndex: number) => {
@@ -680,6 +680,49 @@ test("quiz creation hides the key; either family role can submit one real, durab
   assert.equal(history.attempts.length, 1);
   assert.equal(history.attempts[0]?.id, body.id);
   assert.equal(history.attempts[0]?.correct, false);
+});
+
+test("successive generated lessons rotate topics and visual types from stored history", async () => {
+  const deps = dependencies(async () => config.parentOid);
+  const ops = createOperations();
+  const seen: string[] = [];
+  deps.quizGenerator = { generate: async (_input, _recent, _context, visual, topic) => {
+    assert.ok(topic && visual);
+    seen.push(topic.id);
+    return {
+      lesson: "Let's explore an idea.", question: `Question ${seen.length}?`,
+      options: ["1", "2", "3", "4"], correctIndex: 0, explanation: "A fixture explanation.", visual
+    };
+  } };
+  const create = (supportsNumberLine?: unknown) => dispatch(request("quiz", {
+    method: "POST", body: JSON.stringify({ subject: "Maths", language: "en", ...(supportsNumberLine !== undefined ? { supportsNumberLine } : {}) })
+  }), ops.createQuiz, deps);
+  const first = await create();
+  const second = await create();
+  const third = await create(true);
+  const fourth = await create();
+  const fifth = await create(false);
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 200);
+  assert.equal(third.status, 200);
+  assert.equal(fourth.status, 200);
+  assert.equal(fifth.status, 200);
+  assert.deepEqual(seen, ["equal-groups", "fractions", "number-line", "equal-groups", "fractions"]);
+  assert.equal((first.jsonBody as { visual: { kind: string }; lesson: string }).visual.kind, "array");
+  assert.equal((second.jsonBody as { visual: { kind: string } }).visual.kind, "fraction");
+  assert.equal((third.jsonBody as { visual: { kind: string } }).visual.kind, "numberLine");
+  assert.equal((fourth.jsonBody as { visual: { kind: string } }).visual.kind, "array");
+  assert.equal((fifth.jsonBody as { visual: { kind: string } }).visual.kind, "fraction");
+  assert.equal((await create("true")).status, 400);
+  assert.equal((await create(null)).status, 400);
+  assert.equal(seen.length, 5);
+  assert.equal((first.jsonBody as { lesson: string }).lesson, "Let's explore an idea.");
+
+  deps.quizGenerator = { generate: async () => ({
+    lesson: "A line has steps.", question: "How many hops?", options: ["1", "2", "3", "4"],
+    correctIndex: 1, explanation: "Two hops.", visual: { kind: "numberLine", from: 0, to: 2 }
+  }) };
+  assert.equal((await create()).status, 503);
 });
 
 test("quiz generation shares the model quota and unsupported current affairs never invoke a model", async () => {

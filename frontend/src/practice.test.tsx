@@ -50,7 +50,7 @@ describe('optional piano practice', () => {
 describe('low-pressure backend quiz', () => {
   it('requests a question only on demand and uses persisted attempts for practice records', async () => {
     const api = {
-      quiz: vi.fn().mockResolvedValue({ id: 'backend-quiz-id', question: 'Test fixture question?', options: ['First choice', 'Second choice', 'Third choice', 'Fourth choice'],
+      quiz: vi.fn().mockResolvedValue({ id: 'backend-quiz-id', topic: 'Maps and places', lesson: 'A map can help us describe a place.', question: 'Test fixture question?', options: ['First choice', 'Second choice', 'Third choice', 'Fourth choice'],
         visual: { kind: 'cards', style: 'places', items: ['Forest', 'Lake'] } }),
       answerQuiz: vi.fn().mockResolvedValue({ correct: false, correctIndex: 1, explanation: 'A backend fixture explanation.' }),
       quizAttempts: vi.fn().mockResolvedValue([{ id: 'stored-attempt', subject: 'geography', question: 'Test fixture question?', correct: false, at: '2026-11-13T10:00:00Z' }]),
@@ -61,10 +61,13 @@ describe('low-pressure backend quiz', () => {
     expect(api.quiz).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: /Make me a mission/ }));
     await screen.findByText('Test fixture question?');
+    expect(screen.getByText('Maps and places')).toBeInTheDocument();
+    expect(screen.getByText('A map can help us describe a place.')).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Clues to explore' })).toHaveTextContent('Forest');
-    expect(speak).toHaveBeenCalledWith('Test fixture question?');
+    expect(speak).toHaveBeenCalledWith('A map can help us describe a place. Test fixture question?');
     fireEvent.click(screen.getByRole('button', { name: 'Ask the teacher for a hint' }));
     expect(ask).toHaveBeenCalledWith(expect.stringContaining('Test fixture question?'));
+    expect(ask).toHaveBeenCalledWith(expect.stringContaining('A map can help us describe a place.'));
     expect(ask).toHaveBeenCalledWith(expect.stringContaining('Forest · Lake'));
     fireEvent.click(screen.getByRole('button', { name: /Read the question aloud/ }));
     expect(speak).toHaveBeenCalledTimes(2);
@@ -75,6 +78,7 @@ describe('low-pressure backend quiz', () => {
     expect(await screen.findByText('A backend fixture explanation.')).toBeInTheDocument();
     expect(speak).toHaveBeenCalledWith('A backend fixture explanation.');
     expect(api.answerQuiz).toHaveBeenCalledWith('backend-quiz-id', 0, expect.anything());
+    expect(api.quiz).toHaveBeenCalledTimes(1);
     expect(await screen.findByText('1 stored quiz attempts · 0 recorded correct')).toBeInTheDocument();
     expect(screen.getByText(/Scores describe practice, not ability/)).toBeInTheDocument();
   });
@@ -98,6 +102,15 @@ describe('low-pressure backend quiz', () => {
     const bar = await screen.findByRole('img', { name: '3 filled parts, 8 equal parts' });
     expect(bar.children).toHaveLength(8);
     expect(bar.querySelectorAll('.filled')).toHaveLength(3);
+  });
+  it('presents a number line with labelled start and end for sighted and screen-reader users', async () => {
+    const api = { quiz: vi.fn().mockResolvedValue({ id: 'quiz', question: 'How many hops?', options: ['3', '4', '5', '6'],
+      visual: { kind: 'numberLine', from: 2, to: 7 } }) };
+    render(<Quiz api={api as unknown as Api} subject="maths" language="en" online disabled={false} onBusyChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Make me a mission/ }));
+    const line = await screen.findByRole('img', { name: 'Number line from 0 to 10. Start: 2. End: 7.' });
+    expect(line).toHaveTextContent('2 Start');
+    expect(line).toHaveTextContent('7 End');
   });
 
   it('retains a complete piano score if quiz history is unsupported, without fabricating a zero quiz score', async () => {

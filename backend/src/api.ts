@@ -31,6 +31,7 @@ import { PianoRepository, validatePianoInput } from "./piano.js";
 import { PreferencesRepository } from "./preferences.js";
 import type { SocialAuth } from "./social-auth.js";
 import type { SocialDirectory } from "./social-directory.js";
+import { chooseLearningTopic } from "./curriculum.js";
 import {
   QuizRepository, QuizAnswerConflictError, QuizDuplicateError, QuizNotFoundError,
   UnsupportedQuizSubjectError, validateQuizInput, validateQuizAnswer, chooseMathVisual, type QuizGenerator
@@ -273,7 +274,10 @@ export function createOperations() {
   };
 
   const createQuiz: Operation = async (request, _principalOid, { config, quiz, quizGenerator, quota, repository }) => {
-    const input = validateQuizInput(await readJson(request));
+    const body = await readJson(request) as Record<string, unknown>;
+    const { supportsNumberLine, ...quizInput } = body;
+    if (supportsNumberLine !== undefined && typeof supportsNumberLine !== "boolean") throw new InputValidationError();
+    const input = validateQuizInput(quizInput);
     let category: ErrorCategory = "context";
     try {
       const contextSubject = ({ Norsk: "norwegian", Spanish: "otherLanguages", French: "otherLanguages", German: "otherLanguages" } as Record<string, string>)[input.subject] ?? input.subject.toLowerCase();
@@ -284,10 +288,12 @@ export function createOperations() {
       category = "quota-unavailable";
       await quota.consume(config.parentOid, "chat");
       category = "model";
-      const target = input.subject === "Maths" ? chooseMathVisual(recent.visuals) : undefined;
-      const generated = await quizGenerator.generate(input, recent.questions, context, target);
+      const topic = chooseLearningTopic(input.subject, recent.topics, supportsNumberLine === true);
+      const target = input.subject === "Maths" ? chooseMathVisual(recent.visuals, topic.mathVisual) : undefined;
+      const generated = await quizGenerator.generate(input, recent.questions, context, target, topic);
+      if (generated.visual?.kind === "numberLine" && supportsNumberLine !== true) throw new Error("Unsupported client visual.");
       category = "persistence";
-      return json(200, await quiz.create(config.parentOid, input, generated));
+      return json(200, await quiz.create(config.parentOid, input, generated, topic));
     } catch (error) {
       if (error instanceof QuotaExceededError || error instanceof QuizDuplicateError) throw error;
       throw new OperationFailure(category);

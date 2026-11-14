@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { InputValidationError, validatePreferences, type BlobValue, type JsonBlobStore } from "../src/contracts.js";
 import { PreferencesRepository, readPreferenceDefaults } from "../src/preferences.js";
+import { chooseLearningTopic } from "../src/curriculum.js";
 import {
   QuizRepository, QuizAnswerConflictError, QuizDuplicateError, QuizNotFoundError,
   UnsupportedQuizSubjectError, validateGeneratedQuiz, validateQuizAnswer, validateQuizInput, chooseMathVisual,
@@ -149,9 +150,34 @@ test("visual quiz scenes are bounded, stored with the question, and do not revea
     { ...visual, rows: 0 }, { ...visual, columns: 9 }, { ...visual, icon: "url" },
     { ...visual, script: "bad" }, { kind: "cards", style: "timeline", items: ["Only one"] },
     { kind: "fraction", parts: 2, filled: 3 },
+    { kind: "numberLine", from: 6, to: 5 }, { kind: "numberLine", from: 0, to: 11 },
     { kind: "cards", style: "places", items: ["Safe", "<script>"] },
     { kind: "cards", style: "words", items: ["Safe", "https://example.test"] }
   ]) assert.throws(() => validateGeneratedQuiz({ ...generated, visual: invalid }));
+});
+
+test("curriculum-inspired topics rotate using durable recent history without implying mastery", async () => {
+  const blobs = new MemoryBlobStore();
+  const repository = new QuizRepository(blobs);
+  const first = chooseLearningTopic(input.subject, (await repository.recent(parent, input)).topics);
+  assert.equal(first.mathVisual, "array");
+  const lesson = "Equal groups contain the same number in each group.";
+  const saved = await repository.create(parent, input, { ...generated, lesson }, first);
+  assert.equal(saved.lesson, lesson);
+  assert.equal(saved.topic, "Equal groups");
+  const restarted = new QuizRepository(blobs);
+  const recent = await restarted.recent(parent, input);
+  const next = chooseLearningTopic(input.subject, recent.topics);
+  assert.equal(next.mathVisual, "fraction");
+  assert.equal(chooseMathVisual(recent.visuals, next.mathVisual).kind, "fraction");
+  await assert.rejects(restarted.create(parent, input, { ...generated, question: "A different question?" }, first), QuizDuplicateError);
+  await restarted.create(parent, input, { ...generated, question: "A fraction question?" }, next);
+  const third = chooseLearningTopic(input.subject, (await restarted.recent(parent, input)).topics);
+  assert.equal(chooseMathVisual([], third.mathVisual).kind, "numberLine");
+  await restarted.create(parent, input, { ...generated, question: "A number line question?" }, third);
+  assert.equal(chooseLearningTopic(input.subject, (await restarted.recent(parent, input)).topics).id, first.id);
+  assert.deepEqual((await restarted.recent(otherFamily, input)).topics, []);
+  await restarted.answer(parent, saved.id, 0);
 });
 
 test("recent fingerprints suppress normalized and competing duplicate questions without automatic extra generation", async () => {

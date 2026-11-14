@@ -58,6 +58,7 @@ describe('piano and quiz contracts', () => {
   it('requires four quiz options and rejects contradictory grading', async () => {
     fetchMock.mockResolvedValueOnce(json({ id: 'quiz', question: 'Fixture?', options: ['a', 'b', 'c'] }));
     await expect(api().quiz('geography', 'en')).rejects.toThrow('options');
+    expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).toEqual({ subject: 'geography', language: 'en', supportsNumberLine: true });
     fetchMock.mockResolvedValueOnce(json({ correct: true, correctIndex: 2, explanation: 'Fixture' }));
     await expect(api().answerQuiz('quiz/1', 0)).rejects.toThrow('contradicts');
     expect(fetchMock.mock.calls[1][0]).toBe('https://test.example/api/quiz/quiz%2F1/answer');
