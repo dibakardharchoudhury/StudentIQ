@@ -7,6 +7,17 @@
       "https://dibakardharchoudhury.github.io/StudentIQ/auth.html"
     ]
   },
+  "requiredResourceAccess": [
+    {
+      "resourceAppId": "00000003-0000-0000-c000-000000000000",
+      "resourceAccess": [
+        {
+          "id": "2b9c4092-424d-4249-948d-b43879977640",
+          "type": "Scope"
+        }
+      ]
+    }
+  ],
   "api": {
     "requestedAccessTokenVersion": 2,
     "oauth2PermissionScopes": [

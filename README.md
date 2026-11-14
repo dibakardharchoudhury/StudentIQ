@@ -26,7 +26,11 @@ gaze. Learning scores are based on recorded practice, not attention.
 
 ## Learning activities
 
-The lesson puts visual missions and conversation before the activity area.
+Learning has separate **Mission**, **Talk to teacher**, and **Explore & play**
+spaces, with one activity visible at a time. Switching spaces preserves the
+current mission and unsent question. A compact tutor panel on phones keeps the
+activity within reach. Light violet and midnight themes are available from the
+header; the theme choice is kept in the page URL, not personal-data storage.
 Learners can explore multiplication with a dot array, build English or
 Norwegian sentences, and select stages of the water cycle. The existing
 fraction explorer and piano remain available. These local explorers use no
@@ -36,6 +40,44 @@ to the draft; the learner reviews and sends it explicitly. Conversation,
 quiz and piano practice history continue to be saved by the backend as before.
 Changing subjects or language, starting a new session, or opening an old one
 asks before clearing an unsent question.
+
+### Family access and calendars
+
+Configuration separates **People & access** from **Calendar & reminders**.
+Account approval has a step-by-step identity check, a clear approved-account
+list, role changes, and confirmed removal. Backend administrator authorization
+is unchanged.
+
+External Google, Microsoft work/school and Microsoft personal calendars require
+separate read-only consent: signing into StudentIQ does not grant calendar access.
+Connecting loads all returned calendars and recurring occurrences for the visible
+month, including provider pagination. Limits or partial failures are reported.
+Calendar tokens and data remain in tab memory and are cleared on disconnect,
+expiry, sign-out or leaving Configuration. They are not imported into backend
+storage. Provider setup and consent requirements appear beside each connection.
+The existing Microsoft registrations declare delegated `Calendars.Read.Shared`
+for work/school and `Calendars.ReadBasic` for personal accounts; no application
+permissions or tenant-wide administrator consent are granted. A mailbox and
+account-level consent are still required when connecting.
+Google remains unavailable until a Google OAuth web client and Calendar API
+consent are configured; StudentIQ cannot create a Google client in Azure.
+
+### Published version and updates
+
+The footer displays the exact build version and timestamp in **Europe/Oslo**
+(Norwegian local time, including daylight-saving time). Public `version.json`
+is fetched without caching on load, once per minute, and when returning to the
+tab. A newer build offers an explicit refresh, disabled while an operation is
+busy, with confirmation before discarding an unsent question. Refreshing clears
+in-memory sign-in; saved backend history is unchanged.
+
+The service worker uses network-first HTML navigation and cached static assets
+only as an offline fallback. New workers activate and take control without
+automatically reloading a lesson. Configuration, authentication, version checks
+and private API data remain outside the cache. An already-open old installation
+may need a refresh after the new worker installs. Run
+`npm run build` and `node scripts/check-build.mjs` in `frontend` to validate
+production shell updates and privacy cache boundaries.
 
 Visual missions are optional AI-generated mini-lessons with an introductory
 idea, a question, four choices and bounded visual clues. Maths rotates between
@@ -133,8 +175,11 @@ records after two days, subject to Azure's periodic lifecycle processing and
 seven-day soft deletion. It defines the account-wide management policy, so
 merge any other rules into it before deploying if a policy already exists.
 
-Voice capture requires a user gesture and permission. Audio is sent to Azure
-Speech; learning messages are sent to the backend and model. Audio recordings
+Voice capture requires a user gesture and permission: select **Speak to teacher**,
+then select **Stop listening**, review the transcript and send it. Capture also
+stops after 30 seconds or when the page loses focus. Turn on the teacher's voice
+separately to hear replies. Audio is sent to Azure Speech; learning messages are
+sent to the backend and model. Audio recordings
 are not intentionally stored. Learning text, quiz attempts and settings are
 sensitive data; protect them and do not commit them to the repository.
 

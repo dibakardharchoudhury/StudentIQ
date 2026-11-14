@@ -44,7 +44,7 @@ describe('parent backend authorization gate', () => {
     await screen.findByRole('button', { name: /Checking account access/ });
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     allow([]);
-    await screen.findByRole('textbox');
+    await screen.findByRole('heading', { name: 'What shall we discover today?' });
     expect(screen.queryByRole('button', { name: /Configuration/ })).not.toBeInTheDocument();
     state.signOut.mockReturnValue(new Promise(() => {}));
     fireEvent.click(screen.getByRole('button', { name: /Sign out & clear this screen/ }));
@@ -68,7 +68,7 @@ describe('parent backend authorization gate', () => {
     state.me.mockResolvedValue({ role: 'parent' });
     render(<App />);
     fireEvent.click(await screen.findByRole('button', { name: /Administrator sign-in/ }));
-    await screen.findByRole('textbox');
+    await screen.findByRole('heading', { name: 'What shall we discover today?' });
     expect(screen.queryByRole('button', { name: /Configuration/ })).not.toBeInTheDocument();
   });
   it('fails closed if the role request fails even when sessions would be allowed', async () => {
@@ -84,7 +84,10 @@ describe('parent backend authorization gate', () => {
     state.sessions.mockResolvedValue([]);
     render(<App />);
     fireEvent.click(await screen.findByRole('button', { name: /Administrator sign-in/ }));
-    const input = await screen.findByRole('textbox');
+    const talk = await screen.findByRole('button', { name: 'Talk to teacher' });
+    await waitFor(() => expect(talk).toBeEnabled());
+    fireEvent.click(talk);
+    const input = screen.getByRole('textbox');
     fireEvent.change(input, { target: { value: 'Keep my question' } });
     const language = screen.getByRole('combobox', { name: 'Learning language' });
     fireEvent.change(language, { target: { value: 'nb' } });

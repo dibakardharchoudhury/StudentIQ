@@ -45,6 +45,8 @@ jobs:
         working-directory: frontend
         env:
           VITE_BASE_PATH: /StudentIQ/
+      - run: node scripts/check-build.mjs
+        working-directory: frontend
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa
         with:
           path: frontend/dist

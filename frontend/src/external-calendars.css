@@ -1,0 +1,16 @@
+.external-calendars {
+  margin-block-start: 2rem;
+  padding-block-start: 1.5rem;
+  border-block-start: 2px solid currentColor;
+  overflow-wrap: anywhere;
+}
+.external-calendar-sources { display: grid; gap: 1rem; }
+.external-calendar-source { padding: 1rem; border: 1px solid currentColor; border-radius: 1rem; }
+.external-calendar-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-block: .75rem; }
+.external-calendar-source details { margin-block: .75rem; }
+.external-calendar-source summary { cursor: pointer; }
+.external-calendar-list { margin-block-start: 1rem; padding-block-start: .5rem; border-block-start: 1px solid currentColor; }
+.external-calendar-list ul { padding-inline-start: 1.5rem; }
+.external-calendar-list li { margin-block: .75rem; }
+.external-calendar-list li span { display: block; }
+.external-calendar-source [role="alert"] { border-inline-start: 4px solid currentColor; padding-inline-start: .75rem; }

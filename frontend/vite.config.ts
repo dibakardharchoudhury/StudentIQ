@@ -1,6 +1,11 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { deflateSync } from 'node:zlib';
+import { readFileSync } from 'node:fs';
+
+const packageVersion: string = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version;
+const builtAt = new Date().toISOString();
+const buildVersion = `${packageVersion}-${builtAt.replace(/[-:.]/g, '')}`;
 
 function basePath(value: string) {
   if (!/^\/(?:[A-Za-z0-9._~-]+\/)*$/.test(value) || value.includes('..')) {
@@ -9,14 +14,14 @@ function basePath(value: string) {
   return value;
 }
 
-// Generate install icons locally; their palette is the Clawpilot light theme.
+// Generate install icons locally using the app's light-theme accent.
 function icon(size: number) {
   const rows = Buffer.alloc((size * 4 + 1) * size);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const book = x > size * .23 && x < size * .77 && y > size * .28 && y < size * .70;
       const spine = Math.abs(x - size / 2) < size * .025;
-      const rgb = book && !spine ? [255, 255, 255] : [177, 31, 75];
+      const rgb = book && !spine ? [255, 255, 255] : [101, 66, 193];
       const offset = y * (size * 4 + 1) + 1 + x * 4;
       rows.set([...rgb, 255], offset);
     }
@@ -48,6 +53,10 @@ function pwa(base: string): Plugin {
   return {
     name: 'studentiq-static-pwa',
     generateBundle(_, bundle) {
+      this.emitFile({
+        type: 'asset', fileName: 'version.json',
+        source: JSON.stringify({ version: buildVersion, builtAt }),
+      });
       for (const size of [192, 512]) {
         this.emitFile({ type: 'asset', fileName: `icon-${size}.png`, source: icon(size) });
       }
@@ -65,7 +74,7 @@ function pwa(base: string): Plugin {
       });
       // Vite emits transformed HTML after this hook; the known shell must be explicit.
       const files = ['index.html', ...Object.keys(bundle).filter(file => file.startsWith('assets/'))];
-      const version = Date.now().toString(36);
+      const version = buildVersion;
       this.emitFile({
         type: 'asset', fileName: 'sw.js',
         source: `const PREFIX = ${JSON.stringify(`studentiq-${base}-`)};
@@ -73,12 +82,12 @@ const CACHE = PREFIX + '${version}';
 const BASE = ${JSON.stringify(base)};
 const STATIC = ${JSON.stringify([...files, 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'].map(file => base + file))};
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(STATIC)));
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(STATIC)).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', event => {
   event.waitUntil(caches.keys().then(keys => Promise.all(keys
     .filter(key => key.startsWith(PREFIX) && key !== CACHE)
-    .map(key => caches.delete(key)))));
+    .map(key => caches.delete(key)))).then(() => self.clients.claim()));
 });
 self.addEventListener('fetch', event => {
   const request = event.request;
@@ -88,6 +97,18 @@ self.addEventListener('fetch', event => {
   if (request.method !== 'GET' || request.headers.has('authorization')
       || url.origin !== self.location.origin || url.search || !STATIC.includes(path)) return;
   event.respondWith(caches.open(CACHE).then(async cache => {
+    // A new shell must not be hidden indefinitely behind a cached index.
+    if (path === BASE + 'index.html') {
+      try {
+        const response = await fetch(request, { cache: 'no-store' });
+        if (!response.ok) throw new Error('Shell request failed');
+        return response;
+      } catch (error) {
+        const saved = await cache.match(path);
+        if (saved) return saved;
+        throw error;
+      }
+    }
     const saved = await cache.match(path);
     return saved || fetch(request, { cache: 'no-store' });
   }));
@@ -102,6 +123,10 @@ export default defineConfig(({ mode }) => {
   const base = basePath(env.VITE_BASE_PATH || '/StudentIQ/');
   return {
     base,
+    define: {
+      'import.meta.env.VITE_APP_VERSION': JSON.stringify(buildVersion),
+      'import.meta.env.VITE_BUILD_TIME': JSON.stringify(builtAt),
+    },
     plugins: [react(), pwa(base)],
     build: { chunkSizeWarningLimit: 1600 },
     test: { environment: 'jsdom', setupFiles: ['./src/test-setup.ts'], clearMocks: true },

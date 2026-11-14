@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ApiError, type Api, type Language, type Reminder, type ReminderInput } from './api';
 import { copy } from './i18n';
+import type { AppConfig } from './config';
+import ExternalCalendars from './ExternalCalendars';
 
 function localDate(year: number, month: number, day: number) {
   const date = new Date(0);
@@ -16,8 +18,8 @@ function fromKey(value: string) {
   return localDate(year, month - 1, day);
 }
 
-export default function PlanningCalendar({ api, language, online, onBusyChange, onAccessDenied }: {
-  api: Api; language: Language; online: boolean;
+export default function PlanningCalendar({ api, language, online, onBusyChange, onAccessDenied, config }: {
+  api: Api; language: Language; online: boolean; config?: AppConfig;
   onBusyChange(busy: boolean): void; onAccessDenied(): void;
 }) {
   const c = copy(language);
@@ -182,5 +184,6 @@ export default function PlanningCalendar({ api, language, online, onBusyChange, 
         {editing && <button type="button" disabled={busy} onClick={() => { setEditing(null); setTitle(''); setDate(selectedDate); }}>{c.cancelEdit}</button>}
       </form>
     </div>
+    <ExternalCalendars config={config} language={language} online={online} year={year} month={monthIndex} />
   </section>;
 }

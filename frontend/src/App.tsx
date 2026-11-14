@@ -4,7 +4,8 @@ import { ParentAuth } from './auth';
 import { loadConfig } from './config';
 import type { AppConfig } from './config';
 import GoogleSignIn from './GoogleSignIn';
-import { copy, subjects, subjectIcons, subjectLabel } from './i18n';
+import { copy, subjects, subjectLabel } from './i18n';
+import SubjectIcon from './SubjectIcon';
 import { Speech } from './speech';
 import Teacher from './Teacher';
 import FractionExplorer from './FractionExplorer';
@@ -16,6 +17,7 @@ import TeacherSettings from './TeacherSettings';
 import GentleCheckIn from './GentleCheckIn';
 import Quiz from './Quiz';
 import PracticeProgress from './PracticeProgress';
+import BuildStatus from './BuildStatus';
 
 type Runtime = { auth: ParentAuth; api: Api; config: AppConfig };
 type InstallEvent = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> };
@@ -28,6 +30,7 @@ function message(error: unknown) {
 
 export default function App() {
   const [language, setLanguage] = useState<Language>('en');
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
   const c = copy(language);
   const [runtime, setRuntime] = useState<Runtime>();
   const [setupError, setSetupError] = useState('');
@@ -122,6 +125,18 @@ export default function App() {
         <span>Student<span className="accent">IQ</span><small>{c.tagline}</small></span>
       </a>
       <div className="header-actions">
+        <label className="theme-control"><span>{c.themeLabel}</span>
+          <select value={theme} onChange={event => {
+            const next = event.target.value === 'dark' ? 'dark' : 'light';
+            setTheme(next);
+            document.documentElement.dataset.theme = next;
+            const url = new URL(window.location.href);
+            url.searchParams.set('scoutTheme', next);
+            window.history.replaceState(window.history.state, '', url.href);
+          }}>
+            <option value="light">{c.lightTheme}</option><option value="dark">{c.darkTheme}</option>
+          </select>
+        </label>
         <label className="language-control"><span>{c.language}</span>
           <select value={language} disabled={lessonBusy} onChange={event => {
             const next = event.target.value as Language;
@@ -137,7 +152,7 @@ export default function App() {
     {!online && <div className="notice" role="status">{c.offline}</div>}
     {error && <ErrorBanner text={error} dismiss={() => setError('')} label={c.dismiss} />}
     {initialSessions !== null && runtime
-      ? <Workspace api={runtime.api} role={role ?? 'student'} initialSessions={initialSessions} language={language} setLanguage={setLanguage} online={online} onBusyChange={setLessonBusy} onDraftChange={setHasDraft} />
+      ? <Workspace api={runtime.api} role={role ?? 'student'} initialSessions={initialSessions} language={language} setLanguage={setLanguage} online={online} onBusyChange={setLessonBusy} onDraftChange={setHasDraft} config={runtime.config} />
       : <main id="main" className="welcome-layout">
         <section className="welcome-copy">
           <p className="eyebrow">✦ {c.parent}</p>
@@ -181,6 +196,7 @@ export default function App() {
           .catch(() => setError(c.installNote));
       }}>{c.install}</button>}
       <span className="small">{c.installNote}</span>
+      <BuildStatus language={language} busy={lessonBusy || authBusy} hasDraft={hasDraft} />
     </footer>
     {privacy && <section className="privacy-panel" aria-label={c.privacyTitle}>
       <h2>{c.privacyTitle}</h2><p>{c.privacyBody}</p><p>{c.privacyMore}</p>
@@ -193,14 +209,18 @@ export function ErrorBanner({ text, dismiss, label }: { text: string; dismiss():
     <button className="quiet" onClick={dismiss} aria-label={label}>×</button></div>;
 }
 
-export function Workspace({ api, initialSessions, language, setLanguage, online, onBusyChange, onDraftChange, role = 'student' }: {
+export function Workspace({ api, initialSessions, language, setLanguage, online, onBusyChange, onDraftChange, role = 'student', config }: {
   api: Api; initialSessions: Session[]; language: Language; setLanguage(language: Language): void; online: boolean;
   onBusyChange?(busy: boolean): void;
   onDraftChange?(hasDraft: boolean): void;
   role?: Role;
+  config?: AppConfig;
 }) {
   const c = copy(language);
   const [view, setView] = useState<View>('learn');
+  const [learningPane, setLearningPane] = useState<'mission' | 'talk' | 'explore'>('mission');
+  const [mathActivity, setMathActivity] = useState<'array' | 'fraction'>('array');
+  const [configView, setConfigView] = useState<'people' | 'calendar'>('people');
   const [subject, setSubject] = useState('maths');
   const [sessions, setSessions] = useState(initialSessions);
   const [detail, setDetail] = useState<SessionDetail | null>(null);
@@ -237,6 +257,8 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
   const speech = useRef<Speech | null>(null);
   const conversation = useRef<HTMLDivElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const focusDraft = useRef(false);
+  const subjectChooser = useRef<HTMLDetailsElement>(null);
   const lessonLanguage = useRef(language);
 
   useEffect(() => { onDraftChange?.(!!draft.trim()); }, [draft, onDraftChange]);
@@ -286,6 +308,12 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
   useEffect(() => {
     if (conversation.current) conversation.current.scrollTop = conversation.current.scrollHeight;
   }, [exchanges, detail]);
+  useEffect(() => {
+    if (learningPane === 'talk' && focusDraft.current) {
+      focusDraft.current = false;
+      textarea.current?.focus();
+    }
+  }, [learningPane]);
 
   function beginRequest(history = false) {
     if (locked.current) return null;
@@ -330,7 +358,7 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
       if (!alive.current) return;
       setDetail(result); setExchanges([]); setSessionId(result.id); setSubject(result.subject);
       lessonLanguage.current = result.language;
-      setLanguage(result.language); setDraft(''); setView('learn');
+      setLanguage(result.language); setDraft(''); setView('learn'); setLearningPane('talk');
     } catch (error) {
       if (alive.current && !controller.signal.aborted) setError(message(error));
     } finally { endRequest(controller); }
@@ -399,7 +427,9 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
     if (locked.current || micRef.current !== 'off' || activityDisabled) return;
     const nextDraft = `${draft}${draft ? '\n\n' : ''}${question}`;
     if (nextDraft.trim().length > MAX_QUESTION_LENGTH) { setError(c.draftFull); return; }
-    cancelVoice(); setDraft(nextDraft); textarea.current?.focus();
+    cancelVoice(); setDraft(nextDraft);
+    if (learningPane === 'talk') textarea.current?.focus();
+    else { focusDraft.current = true; setLearningPane('talk'); }
   }
   const currentSubject = subjectLabel(subject, language);
   const starters = language === 'nb' ? [
@@ -441,17 +471,48 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
     </div>}
     <div role="status" className="sr-only">{status}</div>
     {view === 'config' && adminAllowed
-      ? <><AccessManagement api={api} language={language} online={online} onAccessDenied={() => {
-        setAdminAllowed(false); setView('learn'); setError(c.adminDenied);
-      }} /><PlanningCalendar api={api} language={language} online={online} onBusyChange={setPlannerBusy} onAccessDenied={() => {
-        setAdminAllowed(false); setView('learn'); setError(c.adminDenied);
-      }} /></>
-      : view === 'learn' ? <div className="learning-layout">
+      ? <div className="grownup-space">
+        <div className="grownup-heading"><div><p className="eyebrow">{c.config}</p><h1>{c.grownupTitle}</h1><p>{c.grownupIntro}</p></div></div>
+        <div className="grownup-nav" role="group" aria-label={c.config}>
+          <button type="button" aria-pressed={configView === 'people'} disabled={plannerBusy}
+            onClick={() => setConfigView('people')}>{c.peopleTab}</button>
+          <button type="button" aria-pressed={configView === 'calendar'} disabled={plannerBusy}
+            onClick={() => setConfigView('calendar')}>{c.calendarTab}</button>
+        </div>
+        {configView === 'people' ? <AccessManagement api={api} language={language} online={online} onAccessDenied={() => {
+          setAdminAllowed(false); setView('learn'); setError(c.adminDenied);
+        }} /> : <PlanningCalendar api={api} config={config} language={language} online={online} onBusyChange={setPlannerBusy} onAccessDenied={() => {
+          setAdminAllowed(false); setView('learn'); setError(c.adminDenied);
+        }} />}
+      </div>
+      : view === 'learn' ? <>
+      <section className="adventure-banner" aria-labelledby="adventure-title">
+        <div>
+          <p className="eyebrow">✦ StudentIQ</p>
+          <h1 id="adventure-title">{c.adventureTitle}</h1>
+          <p>{c.adventureIntro}</p>
+          <ol className="adventure-steps" aria-label={c.adventureSteps}>
+            {[c.adventurePick, c.adventureTry, c.adventureTalk].map((step, index) =>
+              <li key={step}><span aria-hidden="true">{index + 1}</span>{step}</li>)}
+          </ol>
+        </div>
+        <svg className="adventure-art" viewBox="0 0 220 160" aria-hidden="true" focusable="false">
+          <circle className="adventure-disc" cx="118" cy="82" r="67" />
+          <path className="adventure-book" d="M37 78Q77 57 112 78Q147 57 187 78v50q-40-18-75 3-35-21-75-3Z" />
+          <path className="adventure-book-line" d="M112 78v53M52 91q23-9 45 1M52 104q23-9 45 1M127 92q22-10 45-1M127 105q22-10 45-1" />
+          <path className="adventure-star" d="m166 12 4 11 11 4-11 4-4 11-4-11-11-4 11-4ZM55 25l3 8 8 3-8 3-3 8-3-8-8-3 8-3Z" />
+        </svg>
+      </section>
+      <div className="learning-layout">
       <aside className="teacher-panel">
         <div className="panel-heading"><span className="eyebrow">StudentIQ</span><span className="live-dot">{c.ready}</span></div>
         <Teacher speaking={speaking} appearance={preferences?.appearance} mood={preferences?.mood}
           label={speaking ? c.teacherSpeaking : c.teacherIdle} />
         <p className="small teacher-note">{c.teacherNote}</p>
+        <button type="button" className="talk-shortcut" disabled={disabled || toolBusy} onClick={() => {
+          if (learningPane === 'talk') textarea.current?.focus();
+          else { focusDraft.current = true; setLearningPane('talk'); }
+        }}>{c.talkJump}</button>
         <button className="voice-toggle" disabled={paused} aria-pressed={!muted} onClick={toggleMute}>
           <span aria-hidden="true">{muted ? '◌' : '♪'}</span> {muted ? c.unmute : c.mute}
         </button>
@@ -462,15 +523,26 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
       </aside>
       <section className="lesson-panel" aria-label={c.learn}>
         <div className="lesson-heading">
-          <div><p className="eyebrow">{c.subject}</p><h1>{subjectLabel(subject, language)}</h1></div>
+          <div><p className="eyebrow">{c.currentWorld}</p><h2>{subjectLabel(subject, language)}</h2></div>
           <button onClick={() => newSession()} disabled={disabled || toolBusy}>{c.newSession} +</button>
         </div>
+        <details className="world-chooser" ref={subjectChooser}>
+        <summary>{c.changeWorld}</summary>
         <div className="subject-picker" role="group" aria-label={c.subject}>
           {subjects.map(value => <button key={value} aria-pressed={subject === value} disabled={disabled || toolBusy}
-            onClick={() => { if (value !== subject) newSession(value); }}><span className="subject-icon" aria-hidden="true">{subjectIcons[value]}</span> {subjectLabel(value, language)}</button>)}
+            onClick={() => {
+              if (value !== subject) newSession(value);
+              if (subjectChooser.current) subjectChooser.current.open = false;
+            }}><span className="subject-icon" aria-hidden="true"><SubjectIcon subject={value} /></span> {subjectLabel(value, language)}</button>)}
         </div>
+        </details>
+        <div className="learning-modes" role="group" aria-label={c.learningModes}>
+          {([['mission', c.missionMode], ['talk', c.talkMode], ['explore', c.exploreMode]] as const).map(([pane, label]) =>
+            <button type="button" key={pane} aria-pressed={learningPane === pane} disabled={disabled || toolBusy}
+              onClick={() => { cancelVoice(); setLearningPane(pane); }}>{label}</button>)}
+        </div>
+        <div hidden={learningPane !== 'mission'}>
         <p className="qa-note">{c.qaNote}</p>
-        <a className="activity-link" href="#learning-activities">{c.activities} ↓</a>
         <Quiz key={`${subject}-${language}`} api={api} subject={subject} language={language}
           disabled={disabled || pianoBusy || plannerBusy || needsRefresh} online={online} onBusyChange={setQuizBusy}
           onAsk={addToDraft} onStop={cancelVoice} voiceEnabled={!muted} onSpeak={text => {
@@ -480,6 +552,8 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
               });
             }
           }} />
+        </div>
+        <div hidden={learningPane !== 'talk'}>
         <div ref={conversation} className="conversation" role="region" tabIndex={0}
           aria-label={language === 'nb' ? 'Samtale' : 'Conversation'} aria-busy={busy}>
           {!utterances.length && <div className="empty-conversation">
@@ -518,24 +592,14 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
               disabled={busy || toolBusy || preferencesBusy || paused || !online || needsRefresh}
               aria-disabled={mic === 'finishing' || busy || toolBusy || preferencesBusy || paused || !online || needsRefresh}
               aria-describedby="voice-help" aria-pressed={mic === 'listening'}
-              onPointerDown={event => {
-                if (event.button !== 0) return;
-                event.preventDefault(); event.currentTarget.focus();
-                event.currentTarget.setPointerCapture?.(event.pointerId); startTalking();
-              }}
-              onPointerUp={stopTalking} onPointerCancel={cancelVoice}
-              onLostPointerCapture={stopTalking} onBlur={cancelVoice}
-              onKeyDown={event => {
-                if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); if (!event.repeat) startTalking(); }
-                if (event.key === 'Escape') cancelVoice();
-              }}
-              onKeyUp={event => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); stopTalking(); } }}>
+              onClick={() => { if (micRef.current === 'listening') stopTalking(); else if (micRef.current === 'off') startTalking(); }}
+              onKeyDown={event => { if (event.key === 'Escape') cancelVoice(); }}>
               <span aria-hidden="true">♩</span> {mic === 'listening' ? c.listening : mic === 'finishing' ? c.finalizing : c.talk}
             </button>
             <button className="primary" type="submit" disabled={disabled || toolBusy || !online || !draft.trim() ||
               draft.trim().length > MAX_QUESTION_LENGTH || needsRefresh}>{busy ? c.sending : c.send} <span aria-hidden="true">↗</span></button>
           </div>
-          <div className="mic-status" role="status"><span className={`mic-dot ${mic === 'listening' ? 'on' : ''}`} />{mic === 'listening' ? c.micOn : c.micOff}</div>
+          <div className="mic-status" role="status"><span className={`mic-dot ${mic === 'listening' ? 'on' : ''}`} />{mic === 'listening' ? c.micOn : mic === 'finishing' ? c.finalizing : c.micOff}</div>
           <p className="small" id="voice-help">{c.voiceNote}</p>
         </form>
         <section className="pace-panel" aria-label={c.breakOptions}>
@@ -556,20 +620,29 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
             <button type="button" onClick={() => setBreakSuggested(false)}>{c.dismissBreak}</button></div>}
           {paused && <div className="break-card" role="status"><h2>{c.pausedTitle}</h2><p>{c.pausedBody}</p></div>}
         </section>
-        <section id="learning-activities" className="learning-activities" aria-labelledby="activities-title">
+        </div>
+        <section id="learning-activities" className="learning-activities" aria-labelledby="activities-title" hidden={learningPane !== 'explore'}>
           <div className="activities-intro"><h2 id="activities-title">{c.activities}</h2><p className="small">{c.activitiesNote}</p></div>
           {subject === 'otherLanguages' && <p className="notice language-invite">{c.languageInvite}</p>}
           {subject === 'piano' && <Piano api={api} language={language} disabled={disabled || plannerBusy || quizBusy} online={online} onBusyChange={setPianoBusy} />}
           {subject === 'maths' && <>
+            <div className="activity-tabs" role="group" aria-label={c.activities}>
+              <button type="button" aria-pressed={mathActivity === 'array'} onClick={() => setMathActivity('array')}>{c.arraysTab}</button>
+              <button type="button" aria-pressed={mathActivity === 'fraction'} onClick={() => setMathActivity('fraction')}>{c.fractionsTab}</button>
+            </div>
+            <div hidden={mathActivity !== 'array'}>
             <ArrayExplorer language={language} disabled={activityDisabled} onAsk={addToDraft} />
+            </div>
+            <div hidden={mathActivity !== 'fraction'}>
             <FractionExplorer language={language} disabled={activityDisabled} onAsk={addToDraft} />
+            </div>
           </>}
           {(subject === 'english' || subject === 'norwegian') && <SentenceBuilder key={subject} subject={subject}
             language={language} disabled={activityDisabled} onAsk={addToDraft} />}
           {subject === 'science' && <WaterCycle language={language} disabled={activityDisabled} onAsk={addToDraft} />}
         </section>
       </section>
-    </div> : <section className="records-panel">
+    </div></> : <section className="records-panel">
       <div className="records-heading"><div>
         <p className="eyebrow">{c.parent}</p>
         <h1>{view === 'history' ? c.historyTitle : c.progressTitle}</h1>

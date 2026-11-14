@@ -10,6 +10,14 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, {
       scope: import.meta.env.BASE_URL, updateViaCache: 'none',
+    }).then(registration => {
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && navigator.onLine) {
+          void registration.update().catch(() => {
+            window.dispatchEvent(new Event('studentiq-update-error'));
+          });
+        }
+      });
     }).catch(() => {
       // Installation is optional; do not pretend that offline installation succeeded.
       const notice = document.createElement('p');
