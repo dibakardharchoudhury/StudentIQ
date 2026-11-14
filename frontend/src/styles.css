@@ -111,6 +111,8 @@ summary:focus-visible { outline: 3px solid var(--cp-accent); outline-offset: 4px
 .teacher-settings label { display: flex; flex-direction: column; gap: 4px; font-size: .8125rem; }
 .teacher-settings .error-banner { font-size: .8125rem; }
 .avatar-customizer { text-align: left; margin-top: 16px; border-top: 1px solid var(--cp-border); padding-top: 8px; }
+.avatar-customizer__toggle { width: 100%; text-align: left; white-space: normal; }
+.avatar-customizer > div:not([hidden]) { padding-top: 12px; }
 .avatar-customizer form { display: grid; gap: 10px; }
 .avatar-customizer label { display: grid; gap: 6px; font-size: .875rem; font-weight: 600; }
 .avatar-customizer input { width: 100%; min-width: 0; min-height: 44px; padding: 8px 10px; border: 1px solid var(--cp-border-strong); border-radius: .625rem; background: var(--cp-surface); color: var(--cp-text); }

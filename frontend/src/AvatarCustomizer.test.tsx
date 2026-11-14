@@ -22,7 +22,10 @@ it('rejects unsupported parts and contradictory choices instead of partially app
 it('lets a child preview a prompt immediately, reports unsupported requests, and restores the default', async () => {
   const change = vi.fn();
   render(<AvatarCustomizer value={defaultAvatar} onChange={change} language="en" />);
-  fireEvent.click(screen.getByText('Design your learning companion'));
+  const toggle = screen.getByRole('button', { name: 'Design your learning companion' });
+  expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(toggle);
+  expect(toggle).toHaveAttribute('aria-expanded', 'true');
   const input = await screen.findByRole('textbox', { name: 'How should your teacher look?' });
   fireEvent.change(input, { target: { value: 'blue shirt and short hair' } });
   fireEvent.click(screen.getByRole('button', { name: 'Change avatar' }));
@@ -37,4 +40,7 @@ it('lets a child preview a prompt immediately, reports unsupported requests, and
   expect(change).toHaveBeenLastCalledWith(defaultAvatar);
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   expect(input).toHaveValue('');
+  fireEvent.click(toggle);
+  expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
 });

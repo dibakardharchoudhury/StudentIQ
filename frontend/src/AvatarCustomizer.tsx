@@ -28,7 +28,9 @@ export default function AvatarCustomizer({ value, onChange, language, disabled =
     changed: 'Avatar style updated in this tab.', restored: 'Default avatar restored.',
   };
   return <section className="avatar-customizer">
-    <details onToggle={event => setOpen(event.currentTarget.open)}><summary>{c.title}</summary>
+    <button type="button" className="avatar-customizer__toggle" aria-expanded={open} aria-controls={`${hint}-panel`}
+      onClick={() => setOpen(value => !value)}>{c.title}</button>
+    <div id={`${hint}-panel`} hidden={!open}>
       {open && <>
       <form onSubmit={event => {
         event.preventDefault();
@@ -53,6 +55,6 @@ export default function AvatarCustomizer({ value, onChange, language, disabled =
       {error && <p role="alert">{error}</p>}
       {status && <p role="status">{status}</p>}
       </>}
-    </details>
+    </div>
   </section>;
 }
