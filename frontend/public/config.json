@@ -3,5 +3,6 @@
   "tenantId": "ad340c84-1886-4202-a483-2da2cb9168eb",
   "clientId": "559986d7-88a2-4084-a02a-f8897bbdd32c",
   "apiScope": "api://559986d7-88a2-4084-a02a-f8897bbdd32c/access_as_user",
+  "googleClientId": "64461798273-vor5it5qvfr4gvm89fjv1hmsk2atbfa1.apps.googleusercontent.com",
   "microsoftPersonalClientId": "fa5a0009-06ab-47d1-9fec-992bbf54f72c"
 }

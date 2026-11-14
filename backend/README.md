@@ -87,9 +87,12 @@ and students receive 403 on all admin routes.
 ### Personal-account approval
 
 `GOOGLE_CLIENT_ID` and/or `MICROSOFT_PERSONAL_CLIENT_ID` must match the respective
-frontend public client IDs. Google requires a separate Google Cloud OAuth web
-client; an Azure registration is not a Google client. Neither flow needs a
-client secret in the browser.
+frontend public client IDs. Google uses a Google Cloud OAuth web client, not an
+Azure registration. By owner choice, StudentIQ shares OPB's public Google
+client ID and consent branding. This does not share OPB's sessions, signing
+secrets or account permissions: StudentIQ still verifies each assertion and
+requires its own provider-subject approval. Neither flow needs a client secret
+in the browser. Google Calendar access requires its own API setup and consent.
 
 `POST /api/social/session` accepts exactly `{provider, idToken, nonce}`. Provider
 signature, issuer, audience, expiry, nonce and freshness are checked; Google

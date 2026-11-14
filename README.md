@@ -69,8 +69,12 @@ The existing Microsoft registrations declare delegated `Calendars.Read.Shared`
 for work/school and `Calendars.ReadBasic` for personal accounts; no application
 permissions or tenant-wide administrator consent are granted. A mailbox and
 account-level consent are still required when connecting.
-Google remains unavailable until a Google OAuth web client and Calendar API
-consent are configured; StudentIQ cannot create a Google client in Azure.
+Google sign-in uses the owner-approved shared OPB Google OAuth web client.
+Both apps use the same GitHub Pages origin, so they share Google's consent
+branding and any provider account restrictions. StudentIQ's account approvals
+remain independent: an OPB account is not automatically approved here.
+Google Calendar still requires enabling the Calendar API in that Google Cloud
+project and separate read-only consent; sign-in does not grant calendar access.
 
 ### Published version and updates
 
@@ -157,11 +161,15 @@ does not reactivate old sessions.
    `https://dibakardharchoudhury.github.io/StudentIQ/auth.html`. The API setting
    `MICROSOFT_PERSONAL_CLIENT_ID` must match the public
    `microsoftPersonalClientId` in `frontend\public\config.json`.
-2. For Google, create a **new** Google Cloud OAuth web client, authorize the
-   JavaScript origin `https://dibakardharchoudhury.github.io`, and set the
-   resulting public client ID in both frontend `googleClientId` and API
-   `GOOGLE_CLIENT_ID`. Publish the frontend. Follow Google's consent-screen and
-   test-user requirements. Do not reuse another application's credentials.
+2. Google currently shares the owner's
+   [OPB OAuth web client](https://github.com/dibakardharchoudhury/opb-checkin/blob/main/index.html#L1204).
+   The public `googleClientId` in [frontend configuration](frontend/public/config.json)
+   and API `GOOGLE_CLIENT_ID` must match. Its authorized JavaScript origin is
+   `https://dibakardharchoudhury.github.io`, without a project path. Shared use
+   inherits OPB's Google consent branding and test-user/account restrictions.
+   A separate Google Cloud web client can be configured later for independent
+   StudentIQ branding. Never copy OPB session secrets, Graph credentials, or
+   account allowlists into StudentIQ.
 3. Sign in with the intended account. Until approved, access is denied and the
    API records a request only after verifying the provider token. In a separate
    browser/device, sign in as administrator, open **Configuration → People &
