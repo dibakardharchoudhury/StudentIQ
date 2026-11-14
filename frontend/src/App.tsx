@@ -177,7 +177,7 @@ export default function App() {
             <div className="signin-family">
               {runtime?.config.microsoftPersonalClientId && <button className="primary" disabled={authBusy || !online}
                 onClick={() => void signIn(auth => auth.signInMicrosoft(), true)}>{c.microsoftStudent}</button>}
-              {runtime?.config.googleClientId
+              {!runtime ? <p role="status">{c.loading}</p> : runtime.config.googleClientId
                 ? <GoogleSignIn clientId={runtime.config.googleClientId} language={language} disabled={authBusy || !online}
                   onCredential={(token, nonce) => void signIn(auth => auth.exchange('google', token, nonce), true)} />
                 : <div className="signin-unavailable"><button disabled aria-describedby="google-setup-note">{c.googleSignin}</button>

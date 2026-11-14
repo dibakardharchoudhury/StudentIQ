@@ -1,9 +1,27 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Workspace } from './App';
+import App, { Workspace } from './App';
 import { Api, type Session } from './api';
+import { ParentAuth } from './auth';
+import * as configuration from './config';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+it('does not report missing Google setup until the configuration has actually loaded', async () => {
+  let finish!: (config: configuration.AppConfig) => void;
+  const pending = new Promise<configuration.AppConfig>(resolve => { finish = resolve; });
+  vi.spyOn(configuration, 'loadConfig').mockReturnValueOnce(pending);
+  vi.spyOn(ParentAuth.prototype, 'initialize').mockResolvedValue(undefined);
+  render(<App />);
+  expect(screen.queryByText(/Google sign-in needs one-time setup/)).not.toBeInTheDocument();
+  await act(async () => { finish({
+    apiBaseUrl: 'https://test.example',
+    tenantId: '11111111-1111-4111-8111-111111111111',
+    clientId: '22222222-2222-4222-8222-222222222222',
+    apiScope: 'api://fixture/StudentIQ.Access',
+  }); });
+  expect(await screen.findByText(/Google sign-in needs one-time setup/)).toBeInTheDocument();
+});
 
 vi.mock('./Teacher', () => ({ default: () => <div>Animation test placeholder</div> }));
 const speechState = vi.hoisted(() => ({

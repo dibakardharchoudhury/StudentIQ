@@ -130,6 +130,8 @@ branding and any provider account restrictions. StudentIQ's account approvals
 remain independent: an OPB account is not automatically approved here.
 Its Google consent application name is the neutral **Shared Apps**; the opaque
 client ID and both applications' authorization rules are unchanged.
+Sign-in shows a loading status while public configuration is being initialized;
+the Google setup notice appears only after configuration confirms it is missing.
 Google Calendar still requires enabling the Calendar API in that Google Cloud
 project and separate read-only consent; sign-in does not grant calendar access.
 
@@ -223,7 +225,8 @@ does not reactivate old sessions.
    The public `googleClientId` in [frontend configuration](frontend/public/config.json)
    and API `GOOGLE_CLIENT_ID` must match. Its authorized JavaScript origin is
    `https://dibakardharchoudhury.github.io`, without a project path. Shared use
-   inherits OPB's Google consent branding and test-user/account restrictions.
+   inherits the neutral **Shared Apps** consent branding and the Google project's
+   test-user/account restrictions.
    A separate Google Cloud web client can be configured later for independent
    StudentIQ branding. Never copy OPB session secrets, Graph credentials, or
    account allowlists into StudentIQ.
