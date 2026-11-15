@@ -38,4 +38,17 @@ describe('social sign-in', () => {
     await expect(auth.exchange('google', idToken, makeNonce())).rejects.toThrow('sign-in request was sent');
     await expect(auth.token()).rejects.toThrow();
   });
+
+  it('sends an optional one-time code only in the exchange body and reports code failures explicitly', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{"code":"invalid_invitation"}', { status: 403 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const auth = new ParentAuth(config);
+    await auth.initialize();
+    const nonce = makeNonce();
+    await expect(auth.exchange('google', idToken, nonce, 'a'.repeat(32))).rejects.toThrow('access code is invalid');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      provider: 'google', idToken, nonce, invitationCode: 'a'.repeat(32),
+    });
+    await expect(auth.token()).rejects.toThrow();
+  });
 });

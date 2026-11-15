@@ -32,7 +32,7 @@ describe('parent backend authorization gate', () => {
     fireEvent.click(signIn);
     expect(await screen.findByRole('alert')).toHaveTextContent('This parent is not allowed');
     expect(screen.queryByRole('button', { name: /Progress/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'What are you curious about?' })).not.toBeInTheDocument();
   });
   it('opens only after backend confirmation, and sign-out clears the private workspace immediately', async () => {
     let allow!: (value: []) => void;
@@ -42,13 +42,13 @@ describe('parent backend authorization gate', () => {
     await waitFor(() => expect(signIn).toBeEnabled());
     fireEvent.click(signIn);
     await screen.findByRole('button', { name: /Checking account access/ });
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'What are you curious about?' })).not.toBeInTheDocument();
     allow([]);
     await screen.findByRole('heading', { name: 'What shall we discover today?' });
     expect(screen.queryByRole('button', { name: /Configuration/ })).not.toBeInTheDocument();
     state.signOut.mockReturnValue(new Promise(() => {}));
     fireEvent.click(screen.getByRole('button', { name: /Sign out & clear this screen/ }));
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'What are you curious about?' })).not.toBeInTheDocument();
     expect(state.signOut).toHaveBeenCalledOnce();
   });
   it('does not expose Configuration until authenticated /api/me confirms admin', async () => {

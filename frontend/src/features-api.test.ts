@@ -10,6 +10,13 @@ beforeEach(() => { vi.stubGlobal('fetch', fetchMock); fetchMock.mockReset(); });
 afterEach(() => vi.unstubAllGlobals());
 
 describe('backend roles, planning and preferences', () => {
+  it('creates preapprovals without a request and requires an actual one-time code in the response', async () => {
+    const input = { provider: 'microsoft' as const, email: 'person@example.com', role: 'parent' as const, admin: true };
+    fetchMock.mockResolvedValueOnce(json({ invitationCode: 'a'.repeat(32) })).mockResolvedValueOnce(json({}));
+    expect(await api().saveSocialAccount(input)).toEqual({ invitationCode: 'a'.repeat(32) });
+    expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).toEqual(input);
+    await expect(api().saveSocialAccount(input)).rejects.toThrow('API contract error');
+  });
   it('binds email approval to a selected request and refuses student administrator grants', async () => {
     const input = { provider: 'microsoft' as const, requestId: 'a'.repeat(64), email: 'person@example.com', role: 'parent' as const, admin: true };
     fetchMock.mockResolvedValue(new Response('{}'));

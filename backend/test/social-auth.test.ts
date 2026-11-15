@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { AuthenticationError, requireAdmin, roleForOid } from "../src/auth.js";
 import { ApprovalRequiredError, SocialAuth } from "../src/social-auth.js";
-import { emailLabel, SocialDirectory } from "../src/social-directory.js";
+import { emailLabel, InvitationCodeError, SocialDirectory } from "../src/social-directory.js";
 import type { BlobValue, JsonBlobStore } from "../src/contracts.js";
 
 class MemoryStore implements JsonBlobStore {
@@ -58,7 +58,7 @@ test("failed pending-request storage never reports approval-required or creates 
     assert.ok(error instanceof Error && !(error instanceof ApprovalRequiredError));
     assert.equal(error.message, "Directory unavailable"); return true;
   });
-  assert.deepEqual(await directory.snapshot(), { accounts: [], requests: [] });
+  assert.deepEqual(await directory.snapshot(), { accounts: [], requests: [], preapprovals: [] });
   await assert.rejects(social.exchange(body, config, keys), AuthenticationError);
 });
 
@@ -214,4 +214,84 @@ test("concurrent sign-in requests and account changes do not overwrite one anoth
   const state = await directory.snapshot();
   assert.equal(state.requests.length, 2);
   assert.equal(state.accounts.find(account => account.provider === "google")!.admin, true);
+});
+
+test("administrators can pre-add a parent without a request; first provider sign-in consumes the code and binds revocable access", async () => {
+  const { social, directory, store } = await setup();
+  const invite = await directory.preapprove({ provider: "microsoft", email: "New@Example.com", role: "parent", admin: true });
+  assert.equal((await directory.list()).length, 2);
+  const snapshot = await directory.snapshot();
+  assert.equal(snapshot.preapprovals[0]!.email, "new@example.com");
+  assert.equal(JSON.stringify(snapshot).includes(invite.invitationCode), false);
+  assert.equal(JSON.stringify(snapshot).includes("codeHash"), false);
+  const stored = await store.read(`parents/${config.parentOid}/admin/social-accounts.json`);
+  assert.equal(JSON.stringify(stored).includes(invite.invitationCode), false);
+  const { token, keys } = await fixture("microsoft", { subject: "new-person", email: "New@Example.com" });
+  const session = await social.exchange({ provider: "microsoft", idToken: token, nonce, invitationCode: invite.invitationCode }, config, keys);
+  assert.equal(roleForOid(await social.authorize(`Bearer ${session.token}`, config), config), "admin");
+  assert.equal((await directory.snapshot()).preapprovals.length, 0);
+  await assert.rejects(directory.redeem("microsoft", "different-person", "new@example.com", invite.invitationCode), InvitationCodeError);
+  const account = (await directory.list()).find(item => item.subject === "new-person")!;
+  await directory.remove(account.id);
+  await assert.rejects(social.authorize(`Bearer ${session.token}`, config), AuthenticationError);
+});
+
+test("email labels, wrong codes, other providers and mismatched emails cannot redeem preapprovals", async () => {
+  const { social, directory } = await setup();
+  const invite = await directory.preapprove({ provider: "google", email: "new@example.com", role: "student" });
+  const { token, keys } = await fixture("google", { subject: "new-person", email: "new@example.com" });
+  await assert.rejects(social.exchange({ provider: "google", idToken: token, nonce }, config, keys), ApprovalRequiredError);
+  for (const [provider, email, code] of [
+    ["google", "new@example.com", "x".repeat(32)],
+    ["microsoft", "new@example.com", invite.invitationCode],
+    ["google", "other@example.com", invite.invitationCode],
+    ["google", undefined, invite.invitationCode],
+  ] as const) {
+    await assert.rejects(directory.redeem(provider, "stranger", email, code), InvitationCodeError);
+  }
+  assert.equal((await directory.snapshot()).preapprovals.length, 1);
+  const valid = await fixture("google", { subject: "new-person", email: "new@example.com" });
+  await social.exchange({ provider: "google", idToken: valid.token, nonce, invitationCode: invite.invitationCode }, config, valid.keys);
+  assert.equal((await directory.snapshot()).requests.length, 0);
+});
+
+test("preapprovals enforce expiry, removal, parent-only admin rights, and one atomic redemption", async () => {
+  const { directory, store } = await setup();
+  await assert.rejects(directory.preapprove({ provider: "google", email: "new@example.com", role: "student", admin: true }));
+  await assert.rejects(directory.preapprove({ provider: "other", email: "new@example.com", role: "student" }));
+  const invite = await directory.preapprove({ provider: "google", email: "new@example.com", role: "student" });
+  await assert.rejects(directory.preapprove({ provider: "google", email: "NEW@example.com", role: "parent" }));
+  const other = new SocialDirectory(store, config.parentOid);
+  const results = await Promise.allSettled([
+    directory.redeem("google", "one", "new@example.com", invite.invitationCode),
+    other.redeem("google", "two", "new@example.com", invite.invitationCode),
+  ]);
+  assert.equal(results.filter(result => result.status === "fulfilled").length, 1);
+  const cancelled = await directory.preapprove({ provider: "google", email: "cancel@example.com", role: "student" });
+  await directory.remove(cancelled.preapproval.id);
+  await assert.rejects(directory.redeem("google", "cancel", "cancel@example.com", cancelled.invitationCode), InvitationCodeError);
+  const expired = await directory.preapprove({ provider: "microsoft", email: "old@example.com", role: "parent" });
+  const now = Date.now;
+  Date.now = () => now() + 8 * 24 * 60 * 60 * 1000;
+  try {
+    assert.equal((await directory.snapshot()).preapprovals.length, 0);
+    await assert.rejects(directory.redeem("microsoft", "old", "old@example.com", expired.invitationCode), InvitationCodeError);
+  } finally { Date.now = now; }
+});
+
+test("pre-added accounts reserve capacity and either redemption or request approval replaces that reservation", async () => {
+  const { directory } = await setup();
+  const invites = [];
+  for (let index = 0; index < 18; index++) {
+    invites.push(await directory.preapprove({ provider: "google", email: `person${index}@example.com`, role: "student" }));
+  }
+  await assert.rejects(directory.preapprove({ provider: "google", email: "overflow@example.com", role: "student" }));
+  await directory.redeem("google", "redeemed", "person0@example.com", invites[0]!.invitationCode);
+  await directory.request("google", "requested", "person1@example.com");
+  const request = (await directory.snapshot()).requests[0]!;
+  await directory.save({ provider: "google", requestId: request.id, email: request.email, role: "parent" });
+  const state = await directory.snapshot();
+  assert.equal(state.accounts.length, 4);
+  assert.equal(state.preapprovals.length, 16);
+  await assert.rejects(directory.redeem("google", "second-subject", "person1@example.com", invites[1]!.invitationCode), InvitationCodeError);
 });

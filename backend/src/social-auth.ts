@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { JWTVerifyGetKey } from "jose";
 import { AuthenticationError, bearerFromHeader, SOCIAL_ADMIN, SOCIAL_PARENT, SOCIAL_STUDENT, verifySocialToken, type AuthConfig } from "./auth.js";
 import type { JsonBlobStore } from "./contracts.js";
-import { emailLabel, type SocialDirectory, type SocialRole } from "./social-directory.js";
+import { emailLabel, InvitationCodeError, type SocialDirectory, type SocialRole } from "./social-directory.js";
 
 export class ApprovalRequiredError extends AuthenticationError {
   constructor() { super(403); }
@@ -39,8 +39,13 @@ export class SocialAuth {
     if (!await this.blobs.create(`social-auth/used/${digest(body.idToken)}`, { used: true })) {
       throw new AuthenticationError(401);
     }
-    const account = (await this.directory.list()).find(item =>
+    let account = (await this.directory.list()).find(item =>
       item.provider === body.provider && item.subject === payload.sub);
+    if (body.invitationCode !== undefined) {
+      if (typeof body.invitationCode !== "string") throw new InvitationCodeError();
+      if (!account) account = await this.directory.redeem(body.provider, payload.sub!,
+        emailLabel(payload.email) ?? emailLabel(payload.preferred_username), body.invitationCode);
+    }
     if (!account) {
       const email = emailLabel(payload.email) ?? emailLabel(payload.preferred_username);
       await this.directory.request(body.provider, payload.sub!, email);

@@ -33,11 +33,18 @@ const accessRequestSchema = z.object({
   subject: z.string().regex(/^[A-Za-z0-9_-]{1,255}$/), email: z.string().email().max(254).optional(),
   requestedAt: timestamp,
 });
+const preapprovalSchema = z.object({
+  id: z.string().regex(/^[a-f0-9]{64}$/), provider: z.enum(['google', 'microsoft']),
+  email: z.string().email().max(254), role: z.enum(['parent', 'student']),
+  admin: z.boolean(), expiresAt: timestamp,
+}).refine(account => !account.admin || account.role === 'parent', 'Only parents can have administrator rights.');
 const accountInputSchema = z.union([
   z.object({ provider: z.enum(['google', 'microsoft']), subject: z.string().regex(/^[A-Za-z0-9_-]{1,255}$/),
     role: z.enum(['parent', 'student']), admin: z.boolean().optional() }).strict(),
   z.object({ provider: z.enum(['google', 'microsoft']), requestId: z.string().regex(/^[a-f0-9]{64}$/),
     email: z.string().trim().email().max(254), role: z.enum(['parent', 'student']), admin: z.boolean().optional() }).strict(),
+  z.object({ provider: z.enum(['google', 'microsoft']), email: z.string().trim().email().max(254),
+    role: z.enum(['parent', 'student']), admin: z.boolean().optional() }).strict(),
 ]).refine(account => !account.admin || account.role === 'parent', 'Only parents can have administrator rights.');
 const reminderSchema = z.object({
   id, title: z.string().min(1), date: z.iso.date(), completed: z.boolean(),
@@ -92,6 +99,7 @@ export type SpeechToken = z.infer<typeof speechSchema>;
 export type Role = z.infer<typeof meSchema>['role'];
 export type SocialAccount = z.infer<typeof socialAccountSchema>;
 export type SocialAccessRequest = z.infer<typeof accessRequestSchema>;
+export type SocialPreapproval = z.infer<typeof preapprovalSchema>;
 export type SocialAccountInput = z.infer<typeof accountInputSchema>;
 export type Reminder = z.infer<typeof reminderSchema>;
 export type ReminderInput = Pick<Reminder, 'title' | 'date'> | Reminder;
@@ -228,16 +236,20 @@ export class Api {
   async accessDirectory(signal?: AbortSignal) {
     const result = await this.request('/api/access/accounts', z.object({
       accounts: z.array(socialAccountSchema).max(20), requests: z.array(accessRequestSchema).max(50),
+      preapprovals: z.array(preapprovalSchema).max(20).default([]),
     }), signal);
-    for (const rows of [result.accounts, result.requests]) {
+    for (const rows of [result.accounts, result.requests, result.preapprovals]) {
       if (new Set(rows.map(row => row.id)).size !== rows.length) throw new ApiError('API contract error: duplicate accounts or requests.');
     }
     return result;
   }
   async saveSocialAccount(input: SocialAccountInput, signal?: AbortSignal) {
     const result = accountInputSchema.safeParse(input);
-    if (!result.success) throw new ApiError('Enter a valid email and choose a sign-in request. Administrator rights are available only for parents.');
-    await this.response('/api/access/accounts', 'POST', signal, result.data);
+    if (!result.success) throw new ApiError('Enter a valid account or sign-in request. Administrator rights are available only for parents.');
+    if (!('subject' in result.data) && !('requestId' in result.data)) {
+      return this.request('/api/access/accounts', z.object({ invitationCode: z.string().regex(/^[A-Za-z0-9_-]{32}$/) }), signal, result.data);
+    }
+    return this.request('/api/access/accounts', z.object({ invitationCode: z.string().regex(/^[A-Za-z0-9_-]{32}$/).optional() }), signal, result.data);
   }
   async removeSocialAccount(accountId: string, signal?: AbortSignal) {
     if (!/^[a-f0-9]{64}$/.test(accountId)) throw new ApiError('Invalid account identifier.');

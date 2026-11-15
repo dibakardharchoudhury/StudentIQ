@@ -54,20 +54,20 @@ export class ParentAuth {
     this.account = result.account;
     this.client.setActiveAccount(result.account);
   }
-  async signInMicrosoft() {
+  async signInMicrosoft(invitationCode?: string) {
     if (!this.personal) throw new Error('Microsoft personal sign-in is not configured.');
     const nonce = makeNonce();
     const result = await this.personal.loginPopup({ scopes: ['openid', 'profile', 'email'], prompt: 'select_account', nonce });
-    await this.exchange('microsoft', result.idToken, nonce);
+    await this.exchange('microsoft', result.idToken, nonce, invitationCode);
   }
-  async exchange(provider: 'google' | 'microsoft', idToken: string, nonce: string) {
+  async exchange(provider: 'google' | 'microsoft', idToken: string, nonce: string, invitationCode?: string) {
     this.account = null;
     this.client.setActiveAccount(null);
     this.socialToken = null;
     this.socialExpires = 0;
     const response = await fetch(`${this.apiBaseUrl}/api/social/session`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider, idToken, nonce }),
+      body: JSON.stringify({ provider, idToken, nonce, ...(invitationCode ? { invitationCode } : {}) }),
       cache: 'no-store', credentials: 'omit', redirect: 'error',
     });
     if (!response.ok) {
@@ -75,6 +75,9 @@ export class ParentAuth {
         const body: unknown = await response.json();
         if (body && typeof body === 'object' && 'code' in body && body.code === 'approval_required') {
           throw new Error('Your sign-in request was sent to the administrator. Ask them to approve your account in People & access, then sign in again.');
+        }
+        if (body && typeof body === 'object' && 'code' in body && body.code === 'invalid_invitation') {
+          throw new Error('The access code is invalid, expired, or for a different account or sign-in provider. Check the code with your administrator, or remove it to send a sign-in request.');
         }
         throw new Error('This account is not allowed. Ask the administrator to check your access and the sign-in configuration.');
       }
@@ -122,13 +125,6 @@ export class ParentAuth {
     this.account = null;
     this.client.setActiveAccount(null);
     await this.client.clearCache({ account: account ?? undefined });
-    // End the provider session as well; the app clears its data before opening this popup.
-    if (account) {
-      await this.client.logoutPopup({
-        account,
-        postLogoutRedirectUri: new URL(`${import.meta.env.BASE_URL}auth.html`, window.location.origin).href,
-      });
-    }
   }
 }
 

@@ -44,6 +44,7 @@ export default function App() {
   const [initialSessions, setInitialSessions] = useState<Session[] | null>(null);
   const [role, setRole] = useState<Role | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
+  const [invitationCode, setInvitationCode] = useState('');
   const [lessonBusy, setLessonBusy] = useState(false);
   const [hasDraft, setHasDraft] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
@@ -53,7 +54,13 @@ export default function App() {
   const authLock = useRef(false);
   const lifetime = useRef(0);
   const authRequest = useRef<AbortController | null>(null);
+  const signinFeedback = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (!error || initialSessions !== null) return;
+    signinFeedback.current?.focus({ preventScroll: true });
+    signinFeedback.current?.scrollIntoView({ block: 'center', behavior: 'instant' });
+  }, [error, initialSessions]);
   useEffect(() => {
     const cancel = () => authRequest.current?.abort();
     window.addEventListener('pagehide', cancel);
@@ -104,7 +111,7 @@ export default function App() {
       const [sessions, me] = await Promise.all([
         runtime.api.sessions(controller.signal), runtime.api.me(controller.signal),
       ]);
-      if (!controller.signal.aborted) { setRole(me.role); setInitialSessions(sessions); }
+      if (!controller.signal.aborted) { setRole(me.role); setInitialSessions(sessions); setInvitationCode(''); }
     } catch (error) {
       if (!controller.signal.aborted) {
         setError(signedIn || social ? message(error) : c.authError);
@@ -154,7 +161,7 @@ export default function App() {
       </div>
     </header>
     {!online && <div className="notice" role="status">{c.offline}</div>}
-    {error && <ErrorBanner text={error} dismiss={() => setError('')} label={c.dismiss} />}
+    {error && initialSessions !== null && <ErrorBanner text={error} dismiss={() => setError('')} label={c.dismiss} />}
     {initialSessions !== null && runtime
       ? <Workspace api={runtime.api} role={role ?? 'student'} initialSessions={initialSessions} language={language} setLanguage={setLanguage} online={online} onBusyChange={setLessonBusy} onDraftChange={setHasDraft} config={runtime.config} avatarStyle={avatarStyle} onAvatarChange={setAvatarStyle} />
       : <main id="main" className="welcome-layout">
@@ -175,11 +182,21 @@ export default function App() {
             <h2 id="signin-title">{c.signinTitle}</h2>
             <p className="small">{c.signinHint}</p>
             <div className="signin-family">
+              <details className="signin-access-code">
+                <summary>{c.accessCodeTitle}</summary>
+                <label>{c.accessCodeLabel}<input type="text" value={invitationCode} disabled={authBusy}
+                  onChange={event => setInvitationCode(event.target.value.trim())} maxLength={32}
+                  autoComplete="off" autoCapitalize="none" spellCheck={false} aria-describedby="signin-code-hint" /></label>
+                <p id="signin-code-hint" className="small">{c.accessCodeHint}</p>
+              </details>
+              {error && <div className="signin-feedback" ref={signinFeedback} tabIndex={-1}>
+                <ErrorBanner title={c.signinNoticeTitle} text={error} dismiss={() => setError('')} label={c.dismiss} />
+              </div>}
               {runtime?.config.microsoftPersonalClientId && <button className="primary" disabled={authBusy || !online}
-                onClick={() => void signIn(auth => auth.signInMicrosoft(), true)}>{c.microsoftStudent}</button>}
+                onClick={() => void signIn(auth => auth.signInMicrosoft(invitationCode || undefined), true)}>{c.microsoftStudent}</button>}
               {!runtime ? <p role="status">{c.loading}</p> : runtime.config.googleClientId
                 ? <GoogleSignIn clientId={runtime.config.googleClientId} language={language} disabled={authBusy || !online}
-                  onCredential={(token, nonce) => void signIn(auth => auth.exchange('google', token, nonce), true)} />
+                  onCredential={(token, nonce) => void signIn(auth => auth.exchange('google', token, nonce, invitationCode || undefined), true)} />
                 : <div className="signin-unavailable"><button disabled aria-describedby="google-setup-note">{c.googleSignin}</button>
                   <p className="small" id="google-setup-note">{c.googleUnavailable}</p>
                   <details><summary>{c.googleSetupTitle}</summary><p className="small">{c.googleSetupHint}</p>
@@ -223,8 +240,8 @@ export default function App() {
   </div>;
 }
 
-export function ErrorBanner({ text, dismiss, label }: { text: string; dismiss(): void; label: string }) {
-  return <div className="error-banner" role="alert"><p>{text}</p>
+export function ErrorBanner({ text, dismiss, label, title }: { text: string; dismiss(): void; label: string; title?: string }) {
+  return <div className="error-banner" role="alert"><div>{title && <h3>{title}</h3>}<p>{text}</p></div>
     <button className="quiet" onClick={dismiss} aria-label={label}>×</button></div>;
 }
 

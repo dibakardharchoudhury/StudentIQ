@@ -190,6 +190,31 @@ test("an explicitly granted social administrator can manage access and planning,
   assert.deepEqual((await dispatch(request("me"), operations.me, deps)).jsonBody, { role: "admin" });
 });
 
+test("only administrators can add accounts in advance, and listing never returns invitation secrets", async () => {
+  const operations = createOperations();
+  const deps = dependencies(async () => SOCIAL_PARENT);
+  const save = () => request("access/accounts", { method: "POST", body: JSON.stringify({
+    provider: "microsoft", email: "person@example.com", role: "parent", admin: true,
+  }) });
+  assert.equal((await dispatch(save(), operations.saveAccount, deps, { adminOnly: true })).status, 403);
+  deps.authorize = async () => SOCIAL_ADMIN;
+  const created = await dispatch(save(), operations.saveAccount, deps, { adminOnly: true });
+  assert.equal(created.status, 200);
+  const body = created.jsonBody as { preapproval: { id: string }; invitationCode: string };
+  assert.match(body.invitationCode, /^[A-Za-z0-9_-]{32}$/);
+  assert.equal(created.headers?.["Cache-Control"], "no-store");
+  const listed = await dispatch(request("access/accounts"), operations.listAccounts, deps, { adminOnly: true });
+  const snapshot = listed.jsonBody as { accounts: unknown[]; preapprovals: unknown[] };
+  assert.equal(snapshot.accounts.length, 0);
+  assert.equal(snapshot.preapprovals.length, 1);
+  assert.equal(JSON.stringify(snapshot).includes(body.invitationCode), false);
+  assert.equal(JSON.stringify(snapshot).includes("codeHash"), false);
+  const remove = request(`access/accounts/${body.preapproval.id}`, { method: "DELETE" });
+  remove.params.id = body.preapproval.id;
+  assert.equal((await dispatch(remove, operations.removeAccount, deps, { adminOnly: true })).status, 200);
+  assert.equal((await deps.socialDirectory!.snapshot()).preapprovals.length, 0);
+});
+
 test("Speech response preserves contract and no-store, and cannot bypass parent authorization", async () => {
   const deps = dependencies(async () => config.parentOid);
   let calls = 0;

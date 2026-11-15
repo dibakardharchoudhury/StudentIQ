@@ -23,6 +23,34 @@ it('does not report missing Google setup until the configuration has actually lo
   expect(await screen.findByText(/Google sign-in needs one-time setup/)).toBeInTheDocument();
 });
 
+it('places approval feedback beside sign-in controls and brings it into focus', async () => {
+  vi.spyOn(configuration, 'loadConfig').mockResolvedValue({
+    apiBaseUrl: 'https://test.example', tenantId: '11111111-1111-4111-8111-111111111111',
+    clientId: '22222222-2222-4222-8222-222222222222', apiScope: 'api://fixture/StudentIQ.Access',
+    microsoftPersonalClientId: '33333333-3333-4333-8333-333333333333',
+  });
+  vi.spyOn(ParentAuth.prototype, 'initialize').mockResolvedValue(undefined);
+  vi.spyOn(ParentAuth.prototype, 'signInMicrosoft').mockRejectedValue(new Error(
+    'Your sign-in request was sent to the administrator. Ask them to approve your account in People & access, then sign in again.',
+  ));
+  const scroll = vi.fn();
+  const original = HTMLElement.prototype.scrollIntoView;
+  HTMLElement.prototype.scrollIntoView = scroll;
+  try {
+    render(<App />);
+    const signin = screen.getByRole('region', { name: 'Choose how to sign in' });
+    fireEvent.click(await within(signin).findByRole('button', { name: 'Sign in with Microsoft personal account' }));
+    const alert = await within(signin).findByRole('alert');
+    expect(alert).toHaveTextContent('Before you sign in again');
+    expect(alert).toHaveTextContent('People & access');
+    await waitFor(() => expect(alert.parentElement).toHaveFocus());
+    expect(scroll).toHaveBeenCalledWith({ block: 'center', behavior: 'instant' });
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    fireEvent.click(within(alert).getByRole('button'));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  } finally { HTMLElement.prototype.scrollIntoView = original; }
+});
+
 vi.mock('./Teacher', () => ({ default: () => <div>Animation test placeholder</div> }));
 const speechState = vi.hoisted(() => ({
   listen: vi.fn(), stop: vi.fn(), cancel: vi.fn(), finish: undefined as ((text: string) => void) | undefined,

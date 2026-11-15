@@ -95,7 +95,7 @@ secrets or account permissions: StudentIQ still verifies each assertion and
 requires its own provider-subject approval. Neither flow needs a client secret
 in the browser. Google Calendar access requires its own API setup and consent.
 
-`POST /api/social/session` accepts exactly `{provider, idToken, nonce}`. Provider
+`POST /api/social/session` accepts `{provider, idToken, nonce, invitationCode?}`. Provider
 signature, issuer, audience, expiry, nonce and freshness are checked; Google
 also requires verified email, and Microsoft requires the consumer tenant and
 v2 issuer. Each assertion is accepted once. An unapproved identity records a
@@ -104,7 +104,7 @@ never a learning session. A storage failure is an error, not confirmation
 that a request was recorded. Approved identities receive opaque, revocable,
 30-minute sessions. `POST /api/social/logout` revokes the app session.
 
-Admin-only `GET /api/access/accounts` returns `{accounts, requests}` from one
+Admin-only `GET /api/access/accounts` returns `{accounts, requests, preapprovals}` from one
 directory snapshot. Approve using `POST /api/access/accounts` with
 `{provider, requestId, email, role: "parent"|"student", admin?: boolean}`.
 Email is a bounded display label; authorization binds to the selected
@@ -112,12 +112,26 @@ signature-checked provider subject, not the email. Confirm the person directly
 before selecting their request. Missing/expired requests return 409. Requests
 are eligible for 48 hours, limited to 50, and cleaned up on later writes.
 
+To add someone before any request, post `{provider, email, role, admin?}`.
+The response contains `{preapproval, invitationCode}`. Share that code privately:
+it is a 192-bit random secret shown only at creation, stored as a SHA-256 hash,
+and valid for seven days. It is never returned by list operations. First sign-in
+must supply the code and a signature-verified token with the matching provider
+and normalized email/username. Email alone is not proof of account ownership;
+possession of the secret is required even for verified-email providers.
+The code is atomically consumed while binding to the immutable provider subject.
+Incorrect, expired, cancelled or mismatched codes return 403 with
+`code: "invalid_invitation"` and grant no access. Removing a preapproval cancels
+it; approving a request cancels any preapproval for that provider/email.
+
 Parent administrator rights are optional and default false. Students cannot
 be granted those rights. Updating an existing approval retains the compatible
 `{provider, subject, role, admin?}` input; `DELETE /api/access/accounts/{id}`
-removes it. At most 20 accounts can be approved. Role/admin changes replace the
+removes an approval or preapproval. Active and pre-added accounts share a
+20-account limit. Role/admin changes replace the
 account revision, immediately invalidating prior sessions; re-granting rights
-does not revive them. Existing version-1 directories migrate with admin off
+does not revive them. Version-1/2 directories remain readable and migrate to
+version 3 on their next write; missing legacy admin flags default off
 without losing identities or revisions. Conditional writes prevent concurrent
 requests/approvals from overwriting one another. The bootstrap admin is not a
 removable social-directory entry.

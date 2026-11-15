@@ -36,6 +36,14 @@ p { margin-bottom: 16px; }
 .signin-options h2, .signin-options h3, .signin-options p { margin: 0; }
 .signin-options h3 { font-size: .875rem; }
 .signin-family { display: grid; gap: 16px; }
+.signin-access-code { padding: 12px 16px; border: 1px solid var(--cp-border); border-radius: .625rem; background: var(--cp-bg-elevated); }
+.signin-access-code summary { cursor: pointer; min-height: 44px; align-content: center; }
+.signin-access-code label { display: grid; gap: 8px; margin-block: 8px; }
+.signin-access-code input { width: 100%; min-width: 0; min-height: 44px; padding: 10px; border: 1px solid var(--cp-border-strong); border-radius: .625rem; background: var(--cp-surface); color: var(--cp-text); }
+.signin-feedback { scroll-margin-block: 24px; border-radius: .625rem; }
+.signin-feedback .error-banner { margin: 0; border: 2px solid var(--cp-accent); border-left-width: 6px; background: var(--cp-accent-soft); color: var(--cp-text); }
+.signin-feedback .error-banner h3 { font-size: 1.125rem; margin-bottom: 8px; }
+.signin-feedback .error-banner p { font-size: 1rem; line-height: 1.6; }
 .signin-family > button, .signin-unavailable > button { width: 100%; min-height: 48px; padding: 12px 16px; white-space: normal; }
 .signin-unavailable { display: grid; gap: 8px; }
 .signin-unavailable details { font-size: .8125rem; }

@@ -16,7 +16,7 @@ it('accepts email and approves a signature-checked request with optional parent 
   };
   const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
   render(<AccessManagement api={api} language="en" online onAccessDenied={vi.fn()} />);
-  await screen.findByRole('button', { name: 'Use this request: person@example.com' });
+  fireEvent.click(await screen.findByRole('button', { name: 'Use this request: person@example.com' }));
   const email = screen.getByLabelText('Email address') as HTMLInputElement;
   fireEvent.change(email, { target: { value: 'person@example.com' } });
   expect(email.checkValidity()).toBe(true);
@@ -36,10 +36,10 @@ it('accepts email and approves a signature-checked request with optional parent 
   expect(screen.getByText('Administrator', { selector: 'span' })).toBeVisible();
 });
 
-it('never grants rights from an email without a request or carries administrator rights into a student role', async () => {
+it('requires a request in approval mode and never carries administrator rights into a student role', async () => {
   const api = { accessDirectory: vi.fn().mockResolvedValue(snapshot()), saveSocialAccount: vi.fn(), removeSocialAccount: vi.fn() };
   render(<AccessManagement api={api} language="en" online onAccessDenied={vi.fn()} />);
-  await screen.findByRole('button', { name: 'Use this request: person@example.com' });
+  fireEvent.click(await screen.findByRole('button', { name: 'Use this request: person@example.com' }));
   fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'unknown@example.com' } });
   expect(screen.getByRole('button', { name: 'Approve account' })).toBeDisabled();
   expect(api.saveSocialAccount).not.toHaveBeenCalled();
@@ -60,6 +60,7 @@ it('clears stale email matches and requires explicit selection for duplicate pro
     saveSocialAccount: vi.fn(), removeSocialAccount: vi.fn() };
   render(<AccessManagement api={api} language="en" online onAccessDenied={vi.fn()} />);
   await screen.findByRole('button', { name: 'Use this request: unique@example.com' });
+  fireEvent.change(screen.getByLabelText('How would you like to add this account?'), { target: { value: 'request' } });
   const email = screen.getByLabelText('Email address');
   const selection = screen.getByLabelText('Sign-in request');
   fireEvent.change(email, { target: { value: 'unique@example.com' } });
@@ -73,6 +74,43 @@ it('clears stale email matches and requires explicit selection for duplicate pro
   expect(selection).toHaveValue('');
   fireEvent.change(selection, { target: { value: other.id } });
   expect(email).toHaveValue('unique@example.com');
+});
+
+it('adds an account before any request, shows its one-time code, and can cancel the preapproval', async () => {
+  const preapproval = { id: 'd'.repeat(64), provider: 'microsoft', email: 'new@example.com', role: 'parent',
+    admin: true, expiresAt: '2026-11-22T12:00:00Z' };
+  const api = {
+    accessDirectory: vi.fn().mockResolvedValueOnce({ ...snapshot([], []), preapprovals: [] })
+      .mockResolvedValueOnce({ ...snapshot([], []), preapprovals: [preapproval] })
+      .mockResolvedValueOnce({ ...snapshot([], []), preapprovals: [] }),
+    saveSocialAccount: vi.fn().mockResolvedValue({ invitationCode: 'a'.repeat(32) }),
+    removeSocialAccount: vi.fn().mockResolvedValue(undefined),
+  };
+  vi.spyOn(window, 'confirm').mockReturnValue(true);
+  render(<AccessManagement api={api} language="en" online onAccessDenied={vi.fn()} />);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh list' })).toBeEnabled());
+  expect(screen.queryByLabelText('Sign-in request')).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'new@example.com' } });
+  fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'parent' } });
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Add account' }));
+  await waitFor(() => expect(api.saveSocialAccount).toHaveBeenCalledWith(
+    { provider: 'microsoft', email: 'new@example.com', role: 'parent', admin: true }, expect.any(AbortSignal),
+  ));
+  expect(await screen.findByText('a'.repeat(32))).toBeVisible();
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove access: new@example.com' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm removal: new@example.com' }));
+  await waitFor(() => expect(api.removeSocialAccount).toHaveBeenCalledWith(preapproval.id, expect.any(AbortSignal)));
+  await waitFor(() => expect(screen.queryByText('a'.repeat(32))).not.toBeInTheDocument());
+});
+
+it('does not expose opaque provider identifiers in requests or approved account cards', async () => {
+  const api = { accessDirectory: vi.fn().mockResolvedValue(snapshot([parent])),
+    saveSocialAccount: vi.fn(), removeSocialAccount: vi.fn() };
+  const { container } = render(<AccessManagement api={api} language="en" online onAccessDenied={vi.fn()} />);
+  await screen.findByRole('button', { name: 'Use this request: person@example.com' });
+  expect(container.textContent).not.toContain('account-123');
+  expect(screen.queryByText('Account details')).not.toBeInTheDocument();
 });
 
 it('lets an administrator grant, revoke, and remove parent access with explicit confirmation', async () => {

@@ -30,7 +30,7 @@ import {
 import { PianoRepository, validatePianoInput } from "./piano.js";
 import { PreferencesRepository } from "./preferences.js";
 import { ApprovalRequiredError, type SocialAuth } from "./social-auth.js";
-import { AccessRequestError, type SocialDirectory } from "./social-directory.js";
+import { AccessRequestError, InvitationCodeError, type SocialDirectory } from "./social-directory.js";
 import { chooseLearningTopic } from "./curriculum.js";
 import { libraryCatalog, libraryLanguage, libraryQuestion } from "./question-bank.js";
 import {
@@ -177,7 +177,9 @@ export async function dispatch(
     return { ...response, headers: { ...headers, ...(response.headers ?? {}) } };
   } catch (error) {
     let response: HttpResponseInit;
-    if (error instanceof ApprovalRequiredError) {
+    if (error instanceof InvitationCodeError) {
+      response = json(403, { error: error.message, code: "invalid_invitation" });
+    } else if (error instanceof ApprovalRequiredError) {
       response = json(403, { error: "Administrator approval is required. A sign-in request has been recorded.", code: "approval_required" });
     } else if (error instanceof AccessRequestError) {
       response = json(409, { error: error.message });
@@ -252,7 +254,11 @@ export function createOperations() {
   const saveAccount: Operation = async (request, principalOid, { socialDirectory, config }) => {
     requireAdmin(principalOid, config);
     if (!socialDirectory) throw new Error("Access directory is unavailable.");
-    return json(200, { account: await socialDirectory.save(await readJson(request)) });
+    const body = await readJson(request);
+    if (body && typeof body === "object" && !("subject" in body) && !("requestId" in body)) {
+      return json(200, await socialDirectory.preapprove(body));
+    }
+    return json(200, { account: await socialDirectory.save(body) });
   };
   const removeAccount: Operation = async (request, principalOid, { socialDirectory, config }) => {
     requireAdmin(principalOid, config);

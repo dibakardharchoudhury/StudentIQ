@@ -108,8 +108,10 @@ tab state, not saved server history.
 ### Family access and calendars
 
 Configuration separates **People & access** from **Calendar & reminders**.
-Account approval uses an email-labelled, verified sign-in request, a clear
-approved-account list, role changes, and confirmed removal. Parents can optionally
+Administrators can add a provider/email account before its first sign-in and
+privately share a single-use access code, or approve a verified sign-in request.
+The lists show readable account labels, not internal provider identifiers.
+Approved accounts support role changes and confirmed removal. Parents can optionally
 receive administrator rights; students cannot. Server-side authorization protects
 all access management and planning endpoints.
 
@@ -132,6 +134,9 @@ Its Google consent application name is the neutral **Shared Apps**; the opaque
 client ID and both applications' authorization rules are unchanged.
 Sign-in shows a loading status while public configuration is being initialized;
 the Google setup notice appears only after configuration confirms it is missing.
+Sign-in and approval feedback appears directly above the personal-account buttons
+in a prominent callout. It receives keyboard focus and scrolls into view so the
+next steps are not missed above the welcome area.
 Google Calendar still requires enabling the Calendar API in that Google Cloud
 project and separate read-only consent; sign-in does not grant calendar access.
 
@@ -203,17 +208,39 @@ Parents have no administrator rights by default; an administrator can optionally
 grant those rights to a parent. Only administrators can manage access or the
 server-protected planning endpoints. Do not give a child an administrator session.
 
-Social access is disabled until the administrator approves the exact provider
-subject (`sub`) in Configuration. A verified provider signature, issuer,
+Social access is disabled until an administrator approves a provider subject
+(`sub`) from a sign-in request, or the person redeems an administrator-created
+preapproval with a single-use secret and matching provider/email. A verified provider signature, issuer,
 audience, expiry and nonce are required before a short-lived session is issued. Each
 provider assertion is accepted once. Sessions expire after 30 minutes and are
-kept in browser memory only; signing out revokes the app session but does not
-necessarily sign out of Google or Microsoft. Requests and learning records
+kept in browser memory only; signing out revokes the social app session. For the
+bootstrap administrator, sign-out clears the local MSAL account/token cache.
+Neither path opens a provider logout popup or signs out of other Microsoft or
+Google apps; the next Microsoft sign-in explicitly prompts for an account.
+Requests and learning records
 continue to use the existing shared family history. Removing an account or
 changing its role or administrator rights immediately invalidates its existing sessions; re-approval
 does not reactivate old sessions.
 
 ### Approving an account
+
+**Add someone in advance:** in **Configuration → People & access**, choose
+**Add before first sign-in**, enter their personal-account provider and email,
+choose Parent or Student, and select **Add account**. Parent administrator rights
+are optional and require confirmation. Share the displayed **one-time access
+code** privately with that person; no email is sent. On the login page, they open
+**Already added by your administrator?**, enter that code, and sign in with the
+specified provider and email. No prior request is needed.
+
+Codes expire after seven days, are shown only on creation, and are stored only as
+hashes. The server atomically consumes the code and binds access to the verified,
+immutable provider subject. Email alone never grants access. Pre-added and active
+accounts share a 20-account limit. Remove an unused preapproval to cancel it or
+before adding it again with a fresh code. Ordinary request approval also cancels
+an unused preapproval for that provider/email. Existing version 1/2 directories
+are read compatibly and migrate on their next write.
+
+**Alternatively, approve a sign-in request:**
 
 1. The dedicated Microsoft personal SPA registration is
    `fa5a0009-06ab-47d1-9fec-992bbf54f72c` and its only production callback is
