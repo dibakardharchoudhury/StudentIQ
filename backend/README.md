@@ -273,6 +273,7 @@ manipulation, or promise of live current events is used.
 * `GET /api/lessons/daily?subject=maths&language=en` reads/reconciles today's lesson without generating a question or consuming model quota. `subject=otherLanguages` restores the family's last explicitly started Spanish/French/German choice for that teaching language (Spanish before the first lesson).
 * `POST /api/lessons/daily/next` accepts `{subject, language, supportsNumberLine?: boolean}`. It returns the existing unanswered question, or issues the next question using the same generator, rotation, context and quota enforcement as `/api/quiz`.
 * `POST /api/lessons/daily/answer` accepts `{subject, language, date: "YYYY-MM-DD", quizId, answerIndex: 0..3}` and returns `{result, lesson}`. Only questions issued by that lesson can contribute. Same-choice retries return saved grading; changing a saved answer conflicts.
+* `POST /api/lessons/daily/check` accepts the same answer fields and returns only `{correct: boolean}` for the family's current unanswered lesson question. It reads the canonical answer key without exposing it, recording a grade, advancing progress or invoking a model. Wrong checks permit another try; the guided client saves a final answer only after a correct check. These guided grades therefore represent eventual correct completion, **not first-attempt accuracy**. Existing immutable grades and standalone quiz grading are unchanged.
 * Lesson responses contain `{date, timeZone: "UTC", subject, language, target: 10, completed, current, answer}`. `current` is a public quiz question or null; `answer` is null until server grading is saved, then includes the real saved choice, correctness, answer index and explanation. Unanswered keys never leave storage.
 
 Private records live under `parents/{configured-family-oid}/lessons/{UTC-date}/{subject-language-hash}.json`, consistent with existing shared family quiz/history storage. They retain completed quiz IDs and the current public question, not conversation transcripts or new personal data. Optimistic ETag writes prevent duplicate counts and competing clients replacing an unanswered question. The immutable quiz answer remains authoritative: reads reconcile grading if the answer write succeeded but the aggregate lesson update or response failed. Clients must reconcile ambiguous answers rather than automatically resubmit them. Ordinary quiz/library practice is excluded unless its question was explicitly issued by the daily lesson. Ending early requires no destructive write; resuming restores the exact question and confirmed count. New UTC dates start at zero; optional extra questions have no ten-question cap and remain subject to the existing request quota.
@@ -464,8 +465,11 @@ that need another model call reserve again; completed idempotent chat retries
 only replay/repair saved data and do not reserve another unit. Concurrent
 pending attempts can each reserve a unit; every model invocation is charged.
 Counters are not refunded on crashes, upstream failures, or uncertain writes.
-Chat output is limited to 450 model tokens; quiz generation to 600, with
-bounded context/response sizes. Preferences, planning, note practice, grading
+Chat uses a 450-token ceiling for other configured deployments; `model-router`
+uses a bounded 2048-token completion budget and low reasoning effort, leaving
+room for reasoning and visible teacher text. Quiz generation also uses a
+2048-token budget and low effort for `model-router`. Both retain one model call,
+a 25-second timeout and bounded context/response sizes. Preferences, planning, note practice, grading
 saved quizzes and progress retrieval do not call the model.
 
 Exhaustion returns an explicit **429** with a generic error, no counters,

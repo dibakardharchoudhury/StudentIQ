@@ -115,4 +115,10 @@ export class LessonRepository {
     const result = await this.quiz.answer(parentOid, quizId, answerIndex);
     return { result, lesson: await this.get(parentOid, input, date) };
   }
+
+  async check(parentOid: string, input: QuizInput, date: string, quizId: string, answerIndex: number) {
+    const current = await this.load(parentOid, input, date);
+    if (current.record.current?.id !== quizId || current.view.answer) throw new PersistenceConflictError();
+    return this.quiz.check(parentOid, quizId, answerIndex);
+  }
 }

@@ -102,6 +102,7 @@ register("quiz-post", "quiz", ["POST"], operations.createQuiz);
 register("lesson-get", "lessons/daily", ["GET"], operations.getLesson);
 register("lesson-next", "lessons/daily/next", ["POST"], operations.nextLesson);
 register("lesson-answer", "lessons/daily/answer", ["POST"], operations.answerLesson);
+register("lesson-check", "lessons/daily/check", ["POST"], operations.checkLesson);
 register("quiz-answer-post", "quiz/{id}/answer", ["POST"], operations.answerQuiz);
 register("quiz-attempts-get", "quiz/attempts", ["GET"], operations.quizAttempts);
 register("library-get", "library", ["GET"], operations.listLibrary);

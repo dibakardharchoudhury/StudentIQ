@@ -1,0 +1,104 @@
+.piano-lesson.piano-lesson {
+  min-width: 0;
+  max-width: 100%;
+  padding-top: 20px;
+  border-top: 1px solid var(--cp-border);
+  color: var(--cp-text);
+  font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.piano-lesson *,
+.piano-lesson *::before,
+.piano-lesson *::after { box-sizing: border-box; }
+.piano-lesson h3,
+.piano-lesson h4,
+.piano-lesson p { margin: 0; }
+.piano-lesson h3 { font-size: 1.125rem; }
+.piano-lesson h4 { font-size: 1.25rem; overflow-wrap: anywhere; }
+.piano-lesson p { line-height: 1.5; }
+.piano-lesson .piano-lesson-heading p { margin-top: 4px; color: var(--cp-text-muted); }
+.piano-lesson.piano-lesson label { display: grid; min-width: 0; gap: 4px; margin: 0; font-size: .8125rem; }
+.piano-lesson button,
+.piano-lesson select,
+.piano-lesson input,
+.piano-lesson textarea { font: inherit; max-width: 100%; }
+.piano-lesson button,
+.piano-lesson select,
+.piano-lesson.piano-lesson input:not([type="checkbox"]):not([type="range"]),
+.piano-lesson textarea {
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--cp-border-strong);
+  border-radius: .625rem;
+  background: var(--cp-surface);
+  color: var(--cp-text);
+}
+.piano-lesson select,
+.piano-lesson input:not([type="checkbox"]):not([type="range"]),
+.piano-lesson textarea { width: 100%; }
+.piano-lesson button { font-size: .8125rem; line-height: 1.35; white-space: normal; }
+.piano-lesson button:hover:not(:disabled) { background: var(--cp-accent-soft); border-color: var(--cp-accent); }
+.piano-lesson button:disabled { cursor: not-allowed; opacity: .5; }
+.piano-lesson :is(button, input, select, textarea, summary, a, .staff-scroll):focus-visible {
+  outline: 2px solid var(--cp-accent);
+  outline-offset: 3px;
+}
+.piano-lesson .piano-piece-picker { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 12px; margin: 16px 0; }
+.piano-lesson .piano-piece-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
+.piano-lesson .piano-piece-search button { max-width: 160px; }
+.piano-lesson .piano-search-results { display: grid; gap: 8px; max-height: 280px; overflow-y: auto; margin-bottom: 16px; }
+.piano-lesson .piano-search-results button { display: grid; gap: 4px; text-align: left; }
+.piano-lesson .piano-search-results span { color: var(--cp-text-muted); font-weight: 400; }
+.piano-lesson .piano-practice { min-width: 0; padding: 20px; border: 1px solid var(--cp-border); border-radius: 16px; background: var(--cp-surface); }
+.piano-lesson .piano-score-heading { display: flex; justify-content: space-between; align-items: start; gap: 12px; margin-bottom: 12px; }
+.piano-lesson .piano-score-heading > div { min-width: 0; }
+.piano-lesson .piano-credit { margin-top: 4px; font-size: .75rem; color: var(--cp-text-muted); overflow-wrap: anywhere; }
+.piano-lesson .piano-phrase-count { flex-shrink: 0; padding: 6px 8px; border-radius: .625rem; background: var(--cp-surface-soft); font-size: .8125rem; }
+.piano-lesson .piano-note-focus { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-top: 12px; }
+.piano-lesson .current-piano-note { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: .875rem; }
+.piano-lesson .current-piano-note strong { color: var(--cp-accent); font-size: 2rem; line-height: 1.2; }
+.piano-lesson .current-piano-note span,
+.piano-lesson .piano-beats { color: var(--cp-text-muted); font-size: .8125rem; }
+.piano-lesson .staff-scroll { width: 100%; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; margin-top: 8px; }
+.piano-lesson .piano-lesson-staff { display: block; min-width: 560px; width: 100%; color: var(--cp-text); }
+.piano-lesson .piano-lesson-staff text { fill: var(--cp-text); font: 16px "Segoe UI", sans-serif; }
+.piano-lesson .piano-lesson-staff .treble-clef { font: 48px "Segoe UI Symbol", serif; }
+.piano-lesson :is(.staff-line, .note-stem, .note-flag) { stroke: var(--cp-text); stroke-width: 1.5; fill: none; }
+.piano-lesson .note-head { fill: var(--cp-text); stroke: var(--cp-text); stroke-width: 2; }
+.piano-lesson .note-head.open { fill: var(--cp-surface); }
+.piano-lesson .note-highlight { fill: var(--cp-accent-soft); }
+.piano-lesson .current-note :is(.note-head, .note-stem, .note-flag) { stroke: var(--cp-accent); }
+.piano-lesson .current-note .note-head:not(.open),
+.piano-lesson .current-note text { fill: var(--cp-accent); }
+.piano-lesson .piano-phrase-progress { display: block; width: 100%; height: 6px; margin: 8px 0 16px; appearance: none; border: 0; border-radius: .625rem; overflow: hidden; background: var(--cp-surface-soft); color: var(--cp-accent); }
+.piano-lesson .piano-phrase-progress::-webkit-progress-bar { background: var(--cp-surface-soft); }
+.piano-lesson .piano-phrase-progress::-webkit-progress-value { background: var(--cp-accent); }
+.piano-lesson .piano-phrase-progress::-moz-progress-bar { background: var(--cp-accent); }
+.piano-lesson .piano-transport { display: flex; flex-wrap: wrap; gap: 8px; }
+.piano-lesson .piano-follow { background: var(--cp-accent); color: var(--cp-accent-fg); border-color: var(--cp-accent); }
+.piano-lesson .piano-follow:hover:not(:disabled) { background: var(--cp-accent-hover); color: var(--cp-accent-fg); }
+.piano-lesson.piano-lesson .piano-tempo { display: grid; grid-template-columns: auto minmax(60px, 1fr) auto; align-items: center; gap: 12px; margin: 12px 0; }
+.piano-lesson input[type="range"] { width: 100%; min-width: 0; min-height: 44px; margin: 0; accent-color: var(--cp-accent); }
+.piano-lesson .piano-navigation { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding-top: 12px; border-top: 1px solid var(--cp-border); }
+.piano-lesson details { min-width: 0; }
+.piano-lesson summary { min-height: 44px; padding: 12px 0; align-content: center; cursor: pointer; font-size: .875rem; font-weight: 600; }
+.piano-lesson .piano-help { margin-top: 12px; border-top: 1px solid var(--cp-border); }
+.piano-lesson .piano-help p { margin-bottom: 12px; color: var(--cp-text-muted); font-size: .875rem; }
+.piano-lesson .piano-source { display: inline-flex; align-items: center; min-height: 44px; font-size: .8125rem; color: var(--cp-link); overflow-wrap: anywhere; }
+.piano-lesson .piano-import { margin-top: 12px; border-bottom: 1px solid var(--cp-border); }
+.piano-lesson .piano-custom { display: grid; gap: 12px; padding: 4px 0 16px; }
+.piano-lesson .piano-custom .small { font-size: .8125rem; color: var(--cp-text-muted); }
+.piano-lesson.piano-lesson .piano-permission { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+.piano-lesson input[type="checkbox"] { flex-shrink: 0; width: 20px; height: 20px; margin: 0; accent-color: var(--cp-accent); }
+.piano-lesson input[type="file"] { overflow: hidden; }
+.piano-lesson input[type="file"]::file-selector-button { min-height: 44px; border: 1px solid var(--cp-border); border-radius: .625rem; color: var(--cp-text); background: var(--cp-surface-soft); font: inherit; cursor: pointer; }
+.piano-lesson .piano-privacy { margin-top: 12px; color: var(--cp-text-muted); font-size: .75rem; }
+
+@media (max-width: 700px) {
+  .piano-lesson .piano-piece-picker { grid-template-columns: minmax(0, 1fr); }
+  .piano-lesson .piano-practice { padding: 12px; }
+  .piano-lesson .piano-score-heading { flex-wrap: wrap; }
+  .piano-lesson .piano-navigation { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .piano-lesson .piano-transport button { flex: 1 1 120px; }
+}

@@ -70,6 +70,21 @@ test("same-answer retries and concurrent grading count exactly once; conflicting
   assert.equal((await submit()).lesson.completed, 1);
 });
 
+test("guided answer checks allow retrying the same question without saving a grade, advancing or revealing the key", async () => {
+  const { blobs, quiz, lessons, now, generate } = setup();
+  const started = await lessons.next(parent, input, generate);
+  const id = started.current!.id;
+  assert.deepEqual(await lessons.check(parent, input, started.date, id, 0), { correct: false });
+  assert.deepEqual(await lessons.check(parent, input, started.date, id, 1), { correct: true });
+  assert.equal((await quiz.state(parent, id)).answer, null);
+  const restored = await new LessonRepository(blobs, quiz, now).get(parent, input);
+  assert.equal(restored.completed, 0);
+  assert.equal(restored.current!.id, id);
+  assert.equal((await lessons.answer(parent, input, started.date, id, 1)).lesson.completed, 1);
+  await assert.rejects(lessons.check(parent, input, started.date, id, 0), PersistenceConflictError);
+  await assert.rejects(lessons.check("another-family", input, started.date, id, 0), PersistenceConflictError);
+});
+
 test("lost progress writes reconcile saved quiz grading without a second answer submission", async () => {
   const { blobs, quiz, lessons, now, generate } = setup();
   const started = await lessons.next(parent, input, generate);

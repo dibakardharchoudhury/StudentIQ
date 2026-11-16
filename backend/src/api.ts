@@ -369,6 +369,20 @@ export function createOperations() {
     }
   };
 
+  const checkLesson: Operation = async (request, _principalOid, { config, lessons }) => {
+    const body = await readJson(request) as Record<string, unknown>;
+    const { date, quizId, answerIndex, ...rawInput } = body;
+    const input = validateQuizInput(rawInput);
+    const index = validateQuizAnswer({ answerIndex });
+    if (typeof date !== "string" || typeof quizId !== "string") throw new InputValidationError();
+    try { return json(200, await lessons.check(config.parentOid, input, date, quizId, index)); }
+    catch (error) {
+      if (error instanceof InputValidationError || error instanceof PersistenceConflictError ||
+          error instanceof QuizNotFoundError) throw error;
+      throw new OperationFailure("persistence");
+    }
+  };
+
   const listLibrary: Operation = async (request) => {
     const query = new URL(request.url).searchParams;
     if ([...query.keys()].some(key => key !== "language") || query.getAll("language").length !== 1) {
@@ -557,7 +571,7 @@ export function createOperations() {
 
   return {
     health, me, socialSession, socialLogout, listAccounts, saveAccount, removeAccount,
-    getPreferences, putPreferences, createQuiz, answerQuiz, quizAttempts, getLesson, nextLesson, answerLesson,
+    getPreferences, putPreferences, createQuiz, answerQuiz, quizAttempts, getLesson, nextLesson, answerLesson, checkLesson,
     listLibrary, createLibraryQuiz, quizState, quizHint,
     listReminders, saveReminder, deleteReminder,
     recordPiano, listPiano, listSessions, getSession, chat, speechToken

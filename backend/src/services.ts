@@ -139,7 +139,8 @@ export class FoundryTutor implements Tutor {
       body: JSON.stringify({
         model: this.config.foundryModel,
         messages,
-        max_tokens: 450,
+        max_tokens: this.config.foundryModel === "model-router" ? 2048 : 450,
+        ...(this.config.foundryModel === "model-router" ? { reasoning_effort: "low" } : {}),
         temperature: 0.35
       }),
       signal: AbortSignal.timeout(25000)

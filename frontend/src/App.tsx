@@ -568,6 +568,8 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
         <Teacher speaking={speaking} appearance={preferences?.appearance} mood={preferences?.mood}
           label={speaking ? c.teacherSpeaking : c.teacherIdle} customization={avatarStyle ?? localAvatarStyle} />
         </div>
+        <details className="teacher-options">
+        <summary>{language === 'nb' ? 'Utseende, stemme og pauser' : 'Look, voice & breaks'}</summary>
         <AvatarCustomizer value={avatarStyle ?? localAvatarStyle} onChange={onAvatarChange ?? setLocalAvatarStyle}
           language={language} disabled={disabled || toolBusy} />
         <BuddyBreak language={language} disabled={disabled || toolBusy} />
@@ -582,12 +584,13 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
         <TeacherSettings api={api} language={language} disabled={busy || toolBusy || paused || mic !== 'off'} online={online}
           onBusyChange={setPreferencesBusy} onChange={value => { cancelVoice(); setPreferences(value); }} />
         <div className="privacy-strip compact"><span aria-hidden="true">◇</span><p>{c.privateNote}</p></div>
+        </details>
       </aside>
       <section className="lesson-panel" aria-label={c.learn}>
         <div className="lesson-heading">
-          <div><p className="eyebrow">{c.currentWorld}</p><h2>{learningPane === 'library' ? c.libraryMode : subjectLabel(subject, language)}</h2></div>
-          {learningPane !== 'library' && <button onClick={() => newSession()} disabled={disabled || toolBusy}>{c.newSession} +</button>}
-        </div>
+          <div className="lesson-identity"><span className="subject-icon" aria-hidden="true"><SubjectIcon subject={subject} /></span>
+          <div><p className="eyebrow">{c.currentWorld}</p><h2>{learningPane === 'library' ? c.libraryMode : subjectLabel(subject, language)}</h2></div></div>
+          <div className="lesson-tools">
         <details className="world-chooser" ref={subjectChooser} hidden={learningPane === 'library'}>
         <summary>{c.changeWorld}</summary>
         <div className="subject-picker" role="group" aria-label={c.subject}>
@@ -598,8 +601,17 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
             }}><span className="subject-icon" aria-hidden="true"><SubjectIcon subject={value} /></span> {subjectLabel(value, language)}</button>)}
         </div>
         </details>
+          {learningPane !== 'library' && <button onClick={() => newSession()} disabled={disabled || toolBusy}>{c.newSession} +</button>}
+          </div>
+        </div>
         {learningPane !== 'teacher' && <button type="button" disabled={disabled || toolBusy}
           onClick={() => { cancelVoice(); setLearningPane('teacher'); }}>{c.teacherBack}</button>}
+        <div hidden={learningPane !== 'teacher'}>
+          <TeacherSession key={`${subject}-${language}-${teacherSession}`} api={api} subject={subject} language={language}
+            preferences={preferences} online={online}
+            active={learningPane === 'teacher' && view === 'learn' && !paused && !preferencesBusy}
+            onSpeaking={setSpeaking} onBusyChange={setTeacherBusy} onDraftChange={setTeacherHasDraft} onRestart={() => newSession()} />
+        </div>
         <details className="more-activities" open={moreActivities}>
         <summary onClick={event => { event.preventDefault(); setMoreActivities(value => !value); }}>{c.teacherMoreActivities}</summary>
         <div hidden={!moreActivities}>
@@ -611,12 +623,6 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
         </div>
         </div>
         </details>
-        <div hidden={learningPane !== 'teacher'}>
-          <TeacherSession key={`${subject}-${language}-${teacherSession}`} api={api} subject={subject} language={language}
-            preferences={preferences} online={online}
-            active={learningPane === 'teacher' && view === 'learn' && !paused && !preferencesBusy}
-            onSpeaking={setSpeaking} onBusyChange={setTeacherBusy} onDraftChange={setTeacherHasDraft} />
-        </div>
         <div hidden={learningPane !== 'mission'}>
         <p className="qa-note">{c.qaNote}</p>
         <Quiz key={`${subject}-${language}`} api={api} subject={subject} language={language}

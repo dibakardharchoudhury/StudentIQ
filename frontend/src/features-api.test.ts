@@ -61,6 +61,18 @@ describe('backend roles, planning and preferences', () => {
 });
 
 describe('piano and quiz contracts', () => {
+  it('checks a guided answer without treating it as a saved grade or accepting leaked keys', async () => {
+    const client = api();
+    fetchMock.mockResolvedValueOnce(json({ correct: false })).mockResolvedValueOnce(json({ correct: true, correctIndex: 1 }));
+    expect(await client.checkLessonAnswer('maths', 'en', '2026-11-16', 'quiz', 0)).toEqual({ correct: false });
+    expect(fetchMock.mock.calls[0][0]).toBe('https://test.example/api/lessons/daily/check');
+    expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).toEqual({
+      subject: 'maths', language: 'en', date: '2026-11-16', quizId: 'quiz', answerIndex: 0,
+    });
+    await expect(client.checkLessonAnswer('maths', 'en', '2026-11-16', 'quiz', 1)).rejects.toThrow('API contract error');
+    await expect(client.checkLessonAnswer('maths', 'en', '2026-11-16', 'quiz', 4)).rejects.toThrow('four answers');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
   it('loads durable UTC lessons and validates grading without an automatic answer retry', async () => {
     const lesson = { date: '2026-11-16', timeZone: 'UTC', subject: 'Maths', language: 'en',
       completed: 0, target: 10, current: { id: 'quiz', question: 'A fixture?', options: ['A', 'B', 'C', 'D'] }, answer: null };

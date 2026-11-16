@@ -281,6 +281,13 @@ export class QuizRepository {
     } : null };
   }
 
+  async check(parentOid: string, id: string, answerIndex: number): Promise<{ correct: boolean }> {
+    answerIndex = validateQuizAnswer({ answerIndex });
+    const stored = await this.blobs.read<unknown>(`${this.prefix(parentOid)}${validateQuizId(id)}.json`);
+    if (!stored) throw new QuizNotFoundError();
+    return { correct: answerIndex === validateRecord(stored.value).correctIndex };
+  }
+
   async hint(parentOid: string, id: string): Promise<{ hint: string }> {
     const stored = await this.blobs.read<unknown>(`${this.prefix(parentOid)}${validateQuizId(id)}.json`);
     if (!stored) throw new QuizNotFoundError();

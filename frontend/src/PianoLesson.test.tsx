@@ -9,6 +9,26 @@ vi.mock('./piano-audio', () => ({
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('real piano phrase lessons', () => {
+  it.each([
+    { language: 'en' as const, playback: 'Playback', navigation: 'Notes and phrases', progress: 'Phrase progress',
+      importer: 'Your notes and MIDI', picker: 'Choose a piece or theme' },
+    { language: 'nb' as const, playback: 'Avspilling', navigation: 'Noter og fraser', progress: 'Fremdrift i frasen',
+      importer: 'Egne noter og MIDI', picker: 'Velg et stykke eller tema' },
+  ])('keeps practice ready and advanced import disclosed in $language', labels => {
+    render(<PianoLesson language={labels.language} active onContext={vi.fn()} />);
+    expect(screen.getByRole('img')).toHaveAccessibleName(/E4, 1; E4, 1; F4, 1/);
+    expect(screen.getByRole('group', { name: labels.playback })).toBeVisible();
+    expect(screen.getByRole('group', { name: labels.navigation })).toBeVisible();
+    const progress = screen.getByRole('progressbar', { name: labels.progress });
+    expect(progress).toHaveAttribute('value', '1');
+    const importer = screen.getByText(labels.importer).closest('details');
+    expect(importer).not.toHaveAttribute('open');
+    expect(screen.getByRole('checkbox')).not.toBeVisible();
+    fireEvent.change(screen.getByLabelText(labels.picker), { target: { value: 'custom' } });
+    expect(importer).toHaveAttribute('open');
+    expect(screen.getByRole('checkbox')).toBeVisible();
+  });
+
   it('finds a full public-domain score by an accent-free title and prepares actual imported notes automatically', async () => {
     const midi = new Midi();
     midi.addTrack().addNote({ midi: 76, ticks: 0, durationTicks: 480 });

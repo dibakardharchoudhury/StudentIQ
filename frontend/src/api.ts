@@ -341,6 +341,13 @@ export class Api {
   nextLessonQuestion(subject: string, language: Language, signal?: AbortSignal) {
     return this.request('/api/lessons/daily/next', dailyLessonSchema, signal, { subject, language, supportsNumberLine: true });
   }
+  async checkLessonAnswer(subject: string, language: Language, date: string, quizId: string, answerIndex: number, signal?: AbortSignal) {
+    if (!quizId || !Number.isInteger(answerIndex) || answerIndex < 0 || answerIndex > 3) {
+      throw new ApiError('Choose one of the four answers.');
+    }
+    return this.request('/api/lessons/daily/check', z.object({ correct: z.boolean() }).strict(), signal,
+      { subject, language, date, quizId, answerIndex });
+  }
   async answerLesson(subject: string, language: Language, date: string, quizId: string, answerIndex: number, signal?: AbortSignal) {
     if (!quizId || !Number.isInteger(answerIndex) || answerIndex < 0 || answerIndex > 3) {
       throw new ApiError('Choose one of the four answers.');

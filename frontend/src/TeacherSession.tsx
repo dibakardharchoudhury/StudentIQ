@@ -5,14 +5,28 @@ import { MissionVisual } from './Quiz';
 import { Speech } from './speech';
 import PianoLesson from './PianoLesson';
 
-const normalize = (text: string) => text.toLocaleLowerCase().replace(/[.,!?;:]/g, '').trim();
+const normalize = (text: string) => text.toLocaleLowerCase().replace(/[!?;:]|[.,](?!\d)/g, '').trim();
+const numberWords: Record<string, string> = {
+  zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7',
+  eight: '8', nine: '9', ten: '10', eleven: '11', twelve: '12', thirteen: '13', fourteen: '14',
+  fifteen: '15', sixteen: '16', seventeen: '17', eighteen: '18', nineteen: '19', twenty: '20',
+  null: '0', en: '1', ett: '1', to: '2', tre: '3', fire: '4', fem: '5', seks: '6', sju: '7',
+  syv: '7', åtte: '8', ni: '9', ti: '10', elleve: '11', tolv: '12', tretten: '13', fjorten: '14',
+  femten: '15', seksten: '16', sytten: '17', atten: '18', nitten: '19', tjue: '20',
+};
+function answerText(text: string) {
+  const clean = normalize(text).replace(/^(?:the answer is|my answer is|i think it is|i think it's|it is|it's|svaret er|jeg tror det er|det er)\s+/, '');
+  if (/^\d+(?:[.,]\d+)?$/.test(clean)) return String(Number(clean.replace(',', '.')));
+  return numberWords[clean] ?? clean;
+}
 
-export default function TeacherSession({ api, subject, language, preferences, active, online, onSpeaking, onBusyChange, onDraftChange }: {
+export default function TeacherSession({ api, subject, language, preferences, active, online, onSpeaking, onBusyChange, onDraftChange, onRestart }: {
   api: Api; subject: string; language: Language; preferences: Preferences | null;
   active: boolean; online: boolean;
   onSpeaking(active: boolean): void;
   onBusyChange(busy: boolean): void;
   onDraftChange?(hasDraft: boolean): void;
+  onRestart?(): void;
 }) {
   const c = copy(language);
   const [welcome] = useState(() => {
@@ -54,7 +68,7 @@ export default function TeacherSession({ api, subject, language, preferences, ac
   speakingChanged.current = onSpeaking;
   const lessonSubject = subject === 'otherLanguages' ? practiceLanguage : subject;
 
-  function applyLesson(saved: DailyLesson) {
+  function applyLesson(saved: DailyLesson, keepFeedback = false) {
     lesson.current = saved;
     count.current = saved.completed;
     setCompleted(saved.completed);
@@ -75,8 +89,8 @@ export default function TeacherSession({ api, subject, language, preferences, ac
     }
     setDone(saved.completed >= saved.target && !current);
     if (saved.answer && saved.current) {
-      setFeedback(`${saved.answer.correct ? c.quizCorrect : c.quizTry} ${c.teacherAnswer}: ${saved.current.options[saved.answer.correctIndex]}. ${saved.answer.explanation}`);
-    } else setFeedback('');
+      setFeedback(`${saved.answer.correct ? c.teacherCorrect : c.quizTry} ${c.teacherAnswer}: ${saved.current.options[saved.answer.correctIndex]}. ${saved.answer.explanation}`);
+    } else if (!keepFeedback) setFeedback('');
   }
 
   useEffect(() => {
@@ -241,7 +255,7 @@ export default function TeacherSession({ api, subject, language, preferences, ac
     setMode('thinking');
     const saved = await api.nextLessonQuestion(lessonSubject, language, signal);
     if (signal.aborted || !mounted.current) return;
-    applyLesson(saved);
+    applyLesson(saved, true);
     const fresh = saved.answer ? null : saved.current;
     if (!fresh) return;
     await deliver([
@@ -257,13 +271,23 @@ export default function TeacherSession({ api, subject, language, preferences, ac
     if (!current) return;
     void run(async signal => {
       setLessonFailed(true);
+      const checked = await api.checkLessonAnswer(lessonSubject, language, lesson.current!.date, current.id, index, signal);
+      if (signal.aborted || !mounted.current) return;
+      setLessonFailed(false);
+      if (!checked.correct) {
+        setFeedback(c.teacherIncorrect);
+        await deliver(c.teacherIncorrect, signal);
+        return;
+      }
+      pendingWrites.current = true;
+      setLessonFailed(true);
       const saved = await api.answerLesson(lessonSubject, language, lesson.current!.date, current.id, index, signal);
       if (signal.aborted || !mounted.current) return;
       pendingWrites.current = false;
       setLessonFailed(false);
       applyLesson(saved.lesson);
       const result = saved.result;
-      const explanation = `${result.correct ? c.quizCorrect : c.quizTry} ${c.teacherAnswer}: ${current.options[result.correctIndex]}. ${result.explanation}`;
+      const explanation = `${result.correct ? c.teacherCorrect : c.quizTry} ${c.teacherAnswer}: ${current.options[result.correctIndex]}. ${result.explanation}`;
       setFeedback(explanation);
       await deliver(explanation, signal);
       if (signal.aborted) return;
@@ -274,7 +298,7 @@ export default function TeacherSession({ api, subject, language, preferences, ac
       } else {
         await loadQuestion(signal);
       }
-    });
+    }, false);
   }
 
   function receive(text: string) {
@@ -291,7 +315,7 @@ export default function TeacherSession({ api, subject, language, preferences, ac
     if (current) {
       const named = /^(?:option|choice|alternativ|svaralternativ)\s+(one|two|three|four|en|ett|to|tre|fire|[1-4])$/.exec(clean);
       const numbers: Record<string, number> = { one: 0, two: 1, three: 2, four: 3, en: 0, ett: 0, to: 1, tre: 2, fire: 3, '1': 0, '2': 1, '3': 2, '4': 3 };
-      const matching = current.options.flatMap((option, index) => normalize(option) === clean ? [index] : []);
+      const matching = current.options.flatMap((option, index) => answerText(option) === answerText(text) ? [index] : []);
       const index = named ? numbers[named[1]] : matching.length === 1 ? matching[0] : undefined;
       if (index !== undefined) { setDraft(''); answer(index); return; }
     }
@@ -330,8 +354,11 @@ export default function TeacherSession({ api, subject, language, preferences, ac
   const modeText = mode === 'starting' ? c.teacherStarting : mode === 'listening' ? c.teacherListening
     : mode === 'thinking' ? c.teacherThinking : mode === 'speaking' ? c.teacherSpeakingNow : c.micOff;
   return <section className="guided-teacher" aria-label={c.teacherSession}>
+    <header className={subject === 'piano' ? 'guided-overview sr-only' : 'guided-overview'}>
     <h2>{c.teacherSession}</h2>
     <p className="small">{subjectLabel(subject, language)}{subject !== 'piano' && ` · ${completed} / 10 ${c.teacherCompleted}${lessonDate ? ` · ${lessonDate} (UTC)` : ''}`}</p>
+    {subject !== 'piano' && <progress className="lesson-progress" max={10} value={Math.min(completed, 10)} aria-label={c.teacherCompleted} />}
+    </header>
     {subject === 'otherLanguages' && <label>{c.missionLanguage}
       <select value={practiceLanguage} disabled={!lessonReady || busy || blocked || !online || ended || handsFree || !!question || completed > 0 || !!sessionId.current}
         onChange={event => setPracticeLanguage(event.target.value)}>
@@ -342,7 +369,9 @@ export default function TeacherSession({ api, subject, language, preferences, ac
     <div className="teacher-bubble" aria-live="polite">{ended ? c.teacherEnded : reply}</div>
     {feedback && <p className="notice">{feedback}</p>}
     <div className="teacher-session-actions">
-      {!ended && !handsFree && <button type="button" className="primary" disabled={unavailable}
+      {!ended && !question && !done && subject !== 'piano' && <button type="button" className="primary" disabled={unavailable}
+        onClick={() => void run(loadQuestion, false)}>{completed ? c.teacherNext : c.teacherStartLesson}</button>}
+      {!ended && !handsFree && <button type="button" className={question || subject === 'piano' ? 'primary' : undefined} disabled={unavailable}
         onClick={enableConversation}>{c.teacherHandsFree}</button>}
       {!ended && handsFree && <button type="button" onClick={() => {
         pauseVoice();
@@ -350,16 +379,15 @@ export default function TeacherSession({ api, subject, language, preferences, ac
       }}>{c.teacherPauseVoice}</button>}
       {!ended && <button type="button" onClick={() => { interrupt(); setEnded(true); }}>{c.teacherEnd}</button>}
       {ended && !blocked && <button type="button" onClick={() => { setEnded(false); setError(''); }}>{c.teacherResume}</button>}
-      {!ended && !question && !done && subject !== 'piano' && <button type="button" disabled={unavailable}
-        onClick={() => void run(loadQuestion, false)}>{completed ? c.teacherNext : c.teacherStartLesson}</button>}
       {done && !ended && <button type="button" disabled={unavailable}
         onClick={() => void run(loadQuestion, false)}>{c.teacherMore}</button>}
     </div>
     {!ended && <>
-      <p className="small">{c.teacherHandsFreeNote}</p>
-      <p role="status">{modeText}</p>
+      <div className="conversation-status"><p role="status"><span className={`mic-dot ${mode === 'listening' ? 'on' : ''}`} aria-hidden="true" />{modeText}</p>
+      <details className="conversation-help"><summary>{c.teacherConversationHelp}</summary><p className="small">{c.teacherHandsFreeNote}</p></details></div>
       {heard && <p className="notice" role="status">{heard}</p>}
-      {subject === 'piano' && <PianoLesson language={language} active={active && !unavailable} soundAllowed={!handsFree}
+    </>}
+      {subject === 'piano' && <PianoLesson language={language} active={active && online && !busy && !ended} soundAllowed={!handsFree}
         onContext={updatePianoContext} />}
       {question && <div className="guided-question">
         <p>{c.teacherLesson} {completed + 1} / {Math.max(10, completed + 1)}</p>
@@ -373,14 +401,15 @@ export default function TeacherSession({ api, subject, language, preferences, ac
             onClick={() => answer(index)}>{index + 1}. {option}</button>)}
         </div>
       </div>}
-      <form onSubmit={event => { event.preventDefault(); if (draft.trim() && !unavailable) receive(draft.trim()); }}>
+      {!ended && <form className="teacher-composer" onSubmit={event => { event.preventDefault(); if (draft.trim() && !unavailable) receive(draft.trim()); }}>
         <label htmlFor="teacher-reply">{c.teacherType}</label>
         <textarea id="teacher-reply" rows={2} maxLength={700} value={draft} disabled={unavailable}
           onChange={event => setDraft(event.target.value)} />
         <button type="submit" disabled={unavailable || !draft.trim()}>{c.teacherSend}</button>
-      </form>
-    </>}
-    {error && <p className="error-banner" role="alert">{error}</p>}
+      </form>}
+    {error && <div className="lesson-recovery"><p className="error-banner" role="alert">{error}</p>
+      {blocked && onRestart && <button type="button" disabled={!online || busy} onClick={onRestart}>{c.newSession} +</button>}
+    </div>}
     {lessonFailed && online && !busy && <button type="button" onClick={() => {
       const controller = new AbortController();
       request.current = controller;

@@ -110,7 +110,7 @@ test("all application routes require a successful token validator", async () => 
 test("daily lessons authenticate, resume without generation, share family progress and reconcile ordinary saved grading", async () => {
   const operations = createOperations();
   const denied = dependencies(async () => { throw new AuthenticationError(401); });
-  for (const operation of [operations.getLesson, operations.nextLesson, operations.answerLesson]) {
+  for (const operation of [operations.getLesson, operations.nextLesson, operations.answerLesson, operations.checkLesson]) {
     assert.equal((await dispatch(request("lessons/daily?subject=maths&language=en"), operation, denied)).status, 401);
   }
   const deps = dependencies(async () => SOCIAL_STUDENT);
@@ -130,6 +130,14 @@ test("daily lessons authenticate, resume without generation, share family progre
   assert.equal("correctIndex" in started.current, false);
   assert.deepEqual((await next()).jsonBody, started);
   assert.equal(generationCalls, 1);
+  const check = (answerIndex: number) => dispatch(request("lessons/daily/check", {
+    method: "POST", body: JSON.stringify({ subject: "maths", language: "en",
+      date: started.date, quizId: started.current.id, answerIndex })
+  }), operations.checkLesson, deps);
+  assert.deepEqual((await check(0)).jsonBody, { correct: false });
+  assert.deepEqual((await check(1)).jsonBody, { correct: true });
+  assert.equal((await check(4)).status, 400);
+  assert.equal(((await get()).jsonBody as { completed: number }).completed, 0);
   deps.authorize = async () => SOCIAL_PARENT;
   assert.deepEqual((await get()).jsonBody, started);
   // An answer response lost before the lesson aggregate is saved is reconciled on GET.
@@ -143,6 +151,7 @@ test("daily lessons authenticate, resume without generation, share family progre
   }), operations.answerLesson, deps);
   assert.equal((await submit(1)).status, 200);
   assert.equal((await submit(0)).status, 409);
+  assert.equal((await check(0)).status, 409);
   assert.equal((await get()).jsonBody && ((await get()).jsonBody as { completed: number }).completed, 1);
   assert.equal(generationCalls, 1);
   const invalid = await dispatch(request("lessons/daily?subject=maths&language=en&date=2026-01-01"), operations.getLesson, deps);

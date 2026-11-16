@@ -42,7 +42,14 @@ or the microphone. The teacher portrait remains visible while scrolling, includi
 on phones. The older **Question library**, **Mission**, **Talk to teacher**, and
 **Explore & play** spaces are available under collapsed **More activities**.
 Switching spaces preserves the current mission and unsent question.
-Light violet and midnight themes are available from the
+All subjects share a compact lesson header, a subject-icon picker that opens only
+when requested, a visual daily-progress bar and one question workspace. Optional
+activities sit below the main lesson. Piano puts the highlighted note and staff
+first, groups playback separately from note/phrase navigation, and keeps detailed
+guidance and authorized imports in expandable sections. Its practice controls
+remain usable if an optional teacher chat fails; ending the session stops practice
+without removing the score.
+Warm light and charcoal dark themes are available from the
 header; the theme choice is kept in the page URL, not personal-data storage.
 Learners can explore multiplication with a dot array, build English or
 Norwegian sentences, and select stages of the water cycle. The existing
@@ -78,7 +85,7 @@ asks before clearing an unsent question.
 hairstyle, hair/eye/clothing colours, face shape, glasses, a bow and a decorative
 star badge. Both the 3D avatar and illustrated fallback update immediately.
 A limited English or Bokmål prompt shortcut also supports requests such as
-`purple hair, blue shirt and a bow`. Unsupported or conflicting prompt choices
+`skin shade 4, curly black hair, brown eyes and a round face`. Unsupported or conflicting prompt choices
 are reported without partially changing the avatar. Appearance is selected
 directly, not inferred from nationality. This is local,
 bounded styling, not AI image generation: prompts are not sent to a provider or

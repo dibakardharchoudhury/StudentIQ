@@ -13,6 +13,7 @@ export type DiagnosticOperation =
   | "lesson-get"
   | "lesson-next"
   | "lesson-answer"
+  | "lesson-check"
   | "quiz-answer-post"
   | "quiz-attempts-get"
   | "library-get"

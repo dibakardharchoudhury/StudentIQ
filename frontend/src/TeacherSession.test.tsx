@@ -24,7 +24,7 @@ beforeEach(() => {
   voice.finish = undefined; voice.partial = undefined;
 });
 
-async function setup() {
+async function setup(subject = 'maths') {
   let number = 0;
   let saved: DailyLesson = { date: '2026-11-16', timeZone: 'UTC', subject: 'Maths', language: 'en',
     completed: 0, target: 10, current: null, answer: null };
@@ -35,6 +35,7 @@ async function setup() {
       options: ['First', 'Second', 'Third', 'Fourth'],
     })),
     answerQuiz: vi.fn().mockResolvedValue({ correct: true, correctIndex: 0, explanation: 'A saved explanation.' }),
+    checkLessonAnswer: vi.fn().mockResolvedValue({ correct: true }),
     dailyLesson: vi.fn().mockImplementation(async () => saved),
     nextLessonQuestion: vi.fn().mockImplementation(async (subject: string, language: string, signal: AbortSignal) => {
       if (!saved.current || saved.answer) {
@@ -48,14 +49,85 @@ async function setup() {
       return { result, lesson: saved };
     }),
   };
-  const props = { api: api as unknown as Api, subject: 'maths', language: 'en' as const,
+  const props = { api: api as unknown as Api, subject, language: 'en' as const,
     preferences: null, active: true, online: true, onSpeaking: vi.fn(), onBusyChange: vi.fn() };
   const view = render(<TeacherSession {...props} />);
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Start lesson (10 questions)' })).toBeEnabled());
+  await waitFor(() => expect(screen.getByRole('button', { name: subject === 'piano' ? 'Next note' : 'Start lesson (10 questions)' })).toBeEnabled());
   return { api, props, ...view };
 }
 
 describe('guided teacher session', () => {
+  it('keeps real-piano practice usable after an uncertain chat failure and visible after ending', async () => {
+    const { api } = await setup('piano');
+    api.chat.mockRejectedValueOnce(new Error('Tutoring service error (503).'));
+    fireEvent.change(screen.getByLabelText('Your reply'), { target: { value: 'Help me with this note' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send reply' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('may have been saved');
+    expect(screen.getByRole('button', { name: 'Next note' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Send reply' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Next note' }));
+    expect(screen.getByRole('img', { name: /^Treble staff: note names and beat lengths:/ })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'End session' }));
+    expect(screen.getByRole('img', { name: /^Treble staff: note names and beat lengths:/ })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Next note' })).toBeDisabled();
+  });
+  it('clearly appreciates a correct spoken answer before reading the next question', async () => {
+    const { api } = await setup();
+    api.quiz.mockResolvedValueOnce({ id: 'numbers', question: 'What is four plus four?', lesson: '',
+      options: ['8', '18', '80', '88'] });
+    fireEvent.click(screen.getByRole('button', { name: 'Start lesson (10 questions)' }));
+    await screen.findByRole('heading', { name: 'What is four plus four?' });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Turn on conversation' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Turn on conversation' }));
+    await waitFor(() => expect(voice.listen).toHaveBeenCalledOnce());
+    let finishPraise!: () => void;
+    voice.say.mockImplementationOnce(() => new Promise<void>(resolve => { finishPraise = resolve; }));
+    act(() => voice.finish?.('The answer is eight.'));
+    await waitFor(() => expect(voice.say).toHaveBeenLastCalledWith(
+      expect.stringContaining('Yes, that’s correct! Well done.'), 'en', 'default'));
+    expect(api.checkLessonAnswer).toHaveBeenCalledWith('maths', 'en', '2026-11-16', 'numbers', 0, expect.any(AbortSignal));
+    expect(api.quiz).toHaveBeenCalledOnce();
+    expect(api.chat).not.toHaveBeenCalled();
+    await act(async () => finishPraise());
+    await screen.findByRole('heading', { name: 'Question 1?' });
+    expect(screen.getByText(/Yes, that’s correct! Well done/)).toBeInTheDocument();
+  });
+
+  it('politely rejects a wrong spoken answer and listens for another try without revealing or saving the answer', async () => {
+    const { api } = await setup();
+    api.checkLessonAnswer.mockResolvedValueOnce({ correct: false });
+    fireEvent.click(screen.getByRole('button', { name: 'Start lesson (10 questions)' }));
+    await screen.findByRole('heading', { name: 'Question 1?' });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Turn on conversation' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Turn on conversation' }));
+    await waitFor(() => expect(voice.listen).toHaveBeenCalledOnce());
+    act(() => voice.finish?.('Option two.'));
+    await waitFor(() => expect(voice.listen).toHaveBeenCalledTimes(2));
+    expect(voice.say).toHaveBeenLastCalledWith(expect.stringContaining('No, that’s not correct yet.'), 'en', 'default');
+    expect(screen.getByRole('heading', { name: 'Question 1?' })).toBeInTheDocument();
+    expect(screen.getByText(/0 \/ 10 questions answered/)).toBeInTheDocument();
+    expect(api.answerLesson).not.toHaveBeenCalled();
+    expect(api.quiz).toHaveBeenCalledOnce();
+    expect(voice.say.mock.calls.at(-1)?.[0]).not.toContain('The answer is');
+    act(() => voice.finish?.('Option one.'));
+    await screen.findByRole('heading', { name: 'Question 2?' });
+    expect(api.answerLesson).toHaveBeenCalledOnce();
+    expect(screen.getByText(/1 \/ 10 questions answered/)).toBeInTheDocument();
+  });
+
+  it('does not confuse decimal answer text with a different whole-number choice', async () => {
+    const { api } = await setup();
+    api.quiz.mockResolvedValueOnce({ id: 'decimal', question: 'Choose fifteen.', lesson: '',
+      options: ['1.5', '15', '3', '4'] });
+    fireEvent.click(screen.getByRole('button', { name: 'Start lesson (10 questions)' }));
+    await screen.findByRole('heading', { name: 'Choose fifteen.' });
+    await waitFor(() => expect(screen.getByLabelText('Your reply')).toBeEnabled());
+    fireEvent.change(screen.getByLabelText('Your reply'), { target: { value: '15' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send reply' }));
+    await waitFor(() => expect(api.checkLessonAnswer).toHaveBeenCalledWith(
+      'maths', 'en', '2026-11-16', 'decimal', 1, expect.any(AbortSignal)));
+  });
+
   it('restores durable counts and the exact current question after early ending and a full remount', async () => {
     const { api, props, unmount } = await setup();
     fireEvent.click(screen.getByRole('button', { name: 'Start lesson (10 questions)' }));

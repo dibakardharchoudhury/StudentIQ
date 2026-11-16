@@ -29,6 +29,29 @@ it('adds and removes playful accessories in both languages without overriding co
   expect(applyAvatarPrompt('without the glasses', { ...style, glasses: true })).toEqual(style);
 });
 
+it('applies explicit skin, eye, face and hairstyle descriptions in both languages', () => {
+  const expected = { ...defaultAvatar, skin: 'medium', hair: 'black', hairLength: 'curly', eyes: 'brown', face: 'round' };
+  expect(applyAvatarPrompt('skin shade 4, curly black hair, brown eyes and a round face', defaultAvatar)).toEqual(expected);
+  expect(applyAvatarPrompt('hudtone 4, krøllete svart hår, brune øyne og rundt ansikt', defaultAvatar)).toEqual(expected);
+  expect(applyAvatarPrompt('dark skin and a ponytail', defaultAvatar)).toEqual({ ...defaultAvatar, skin: 'dark', hairLength: 'ponytail' });
+  expect(applyAvatarPrompt('without hair', defaultAvatar)).toEqual({ ...defaultAvatar, hairLength: 'none' });
+});
+
+it('asks for visible features rather than guessing an appearance from a background label', () => {
+  const change = vi.fn();
+  render(<AvatarCustomizer value={defaultAvatar} onChange={change} language="en" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Design your learning companion' }));
+  const input = screen.getByRole('textbox', { name: 'How should your teacher look?' });
+  fireEvent.change(input, { target: { value: 'More like a bengali Indian' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Change avatar' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('Describe the features you want');
+  expect(screen.getByRole('alert')).not.toHaveTextContent('cannot draw');
+  expect(change).not.toHaveBeenCalled();
+  fireEvent.change(input, { target: { value: 'Bengali Indian with black hair and medium skin' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Change avatar' }));
+  expect(change).toHaveBeenLastCalledWith({ ...defaultAvatar, hair: 'black', skin: 'medium' });
+});
+
 it('lets a child preview a prompt immediately, reports unsupported requests, and restores the default', async () => {
   const change = vi.fn();
   render(<AvatarCustomizer value={defaultAvatar} onChange={change} language="en" />);

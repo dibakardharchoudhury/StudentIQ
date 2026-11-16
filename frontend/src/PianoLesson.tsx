@@ -3,6 +3,7 @@ import { pianoNotes, type Language } from './api';
 import { copy } from './i18n';
 import { PianoAudio } from './piano-audio';
 import { readPianoScore, scoreSources, type ScoreLine, type ScoreNote, type ScorePitch } from './piano-score';
+import './piano-lesson.css';
 
 type Note = ScoreNote;
 type Piece = { id: string; title: string; credit: string; phrases: Note[][]; tip: { en: string; nb: string }; source?: string };
@@ -42,10 +43,19 @@ const pieces: Piece[] = [
 ];
 
 function Staff({ phrase, current, label }: { phrase: Note[]; current: number; label: string }) {
+  const staff = useRef<SVGSVGElement>(null);
+  useEffect(() => {
+    const container = staff.current?.parentElement;
+    const highlight = staff.current?.querySelector('.note-highlight');
+    if (!container || !highlight) return;
+    const bounds = highlight.getBoundingClientRect();
+    container.scrollTo?.({ left: Math.max(0, container.scrollLeft + bounds.left - container.getBoundingClientRect().left
+      - (container.clientWidth - bounds.width) / 2), behavior: 'smooth' });
+  }, [current, phrase]);
   const y = (pitch: ScorePitch) => 110 - ('CDEFGAB'.indexOf(pitch[0]) + (Number(pitch.at(-1)) - 4) * 7) * 6;
   const top = Math.min(36, ...phrase.map(note => y(note.pitch) - 40));
   const bottom = Math.max(160, ...phrase.map(note => y(note.pitch) + 35));
-  return <svg className="piano-lesson-staff" viewBox={`0 ${top - 12} 640 ${bottom - top + 12}`} role="img" aria-label={`${label}: ${phrase.map(note => `${note.pitch}, ${note.beats}`).join('; ')}`}>
+  return <svg ref={staff} className="piano-lesson-staff" viewBox={`0 ${top - 12} 640 ${bottom - top + 12}`} role="img" aria-label={`${label}: ${phrase.map(note => `${note.pitch}, ${note.beats}`).join('; ')}`}>
     <text x="4" y="90" className="treble-clef">&#119070;</text>
     {[50, 62, 74, 86, 98].map(line => <line key={line} x1="25" x2="625" y1={line} y2={line} className="staff-line" />)}
     {phrase.map((note, index) => {
@@ -72,6 +82,17 @@ export default function PianoLesson({ language, active, onContext, soundAllowed 
   language: Language; active: boolean; onContext(context: string): void; soundAllowed?: boolean;
 }) {
   const c = copy(language);
+  const ui = language === 'nb' ? {
+    intro: 'Spill på ditt eget piano, én frase om gangen.',
+    transport: 'Avspilling', navigation: 'Noter og fraser', progress: 'Fremdrift i frasen',
+    guide: 'Slik øver du', import: 'Egne noter og MIDI', results: 'Søkeresultater',
+    privacy: 'Visuell veiledning · ingen mikrofon eller vurdering',
+  } : {
+    intro: 'Play on your own piano, one phrase at a time.',
+    transport: 'Playback', navigation: 'Notes and phrases', progress: 'Phrase progress',
+    guide: 'How to practise', import: 'Your notes and MIDI', results: 'Search results',
+    privacy: 'Visual guide · no microphone or grading',
+  };
   const [selected, setSelected] = useState('beethoven');
   const [custom, setCustom] = useState<Piece | null>(null);
   const [score, setScore] = useState<Piece | null>(null);
@@ -85,6 +106,7 @@ export default function PianoLesson({ language, active, onContext, soundAllowed 
   const [permission, setPermission] = useState(false);
   const [search, setSearch] = useState('');
   const [searched, setSearched] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [phraseIndex, setPhraseIndex] = useState(0);
   const [noteIndex, setNoteIndex] = useState(0);
   const [tempo, setTempo] = useState(60);
@@ -163,7 +185,7 @@ export default function PianoLesson({ language, active, onContext, soundAllowed 
         credit: uploaded ? c.pianoLessonOwn : `${source.artist} · Mutopia · Public Domain`,
         ...(uploaded ? {} : { source: source.source }), phrases: available[0].phrases,
         tip: { en: copy('en').pianoScoreTip, nb: copy('nb').pianoScoreTip } });
-      setSelected('score'); setSearched(false);
+      setSelected('score'); setSearched(false); setImportOpen(false);
     } catch {
       if (!controller.signal.aborted && generation === scoreGeneration.current) setError(c.pianoScoreError);
     } finally {
@@ -183,83 +205,108 @@ export default function PianoLesson({ language, active, onContext, soundAllowed 
     const phrases: Note[][] = [];
     for (let index = 0; index < parsed.length; index += 8) phrases.push(parsed.slice(index, index + 8));
     reset();
+    setSelected('custom');
     setCustom({ id: 'custom', title: customTitle.trim() || c.pianoLessonCustom, credit: c.pianoLessonOwn,
       phrases, tip: { en: 'Practise one small phrase slowly. Ask a piano teacher for suitable fingering.', nb: 'Øv sakte på én liten frase. Spør en pianolærer om passende fingersetting.' } });
   }
 
   return <section className="piano-lesson" aria-label={c.pianoLessonTitle}>
-    <h3>{c.pianoLessonTitle}</h3>
-    <p>{c.pianoLessonIntro}</p>
-    <form onSubmit={event => { event.preventDefault(); setSearched(true); }}>
-      <label>{c.pianoLessonSearch}<input value={search} maxLength={100} disabled={!active}
-        onChange={event => { setSearch(event.target.value); setSearched(false); }} /></label>
-      <button type="submit" disabled={!active || !search.trim()}>{c.pianoLessonFind}</button>
-    </form>
+    <header className="piano-lesson-heading">
+      <h3>{c.pianoLessonTitle}</h3>
+      <p>{ui.intro}</p>
+    </header>
+    <div className="piano-piece-picker">
+      <label>{c.pianoLessonTheme}<select value={selected} disabled={!active} onChange={event => {
+        reset(); setSelected(event.target.value); setImportOpen(event.target.value === 'custom');
+      }}>
+        <option value="beethoven">Beethoven · Ode to Joy</option>
+        <option value="mozart">Mozart · Ah! vous dirai-je, maman</option>
+        <option value="original">{c.pianoLessonOriginal}</option>
+        <option value="custom">{c.pianoLessonCustom}</option>
+        {score && <option value="score">{score.title}</option>}
+      </select></label>
+      <form className="piano-piece-search" onSubmit={event => { event.preventDefault(); setSearched(true); }}>
+        <label>{c.pianoLessonSearch}<input type="search" value={search} maxLength={100} disabled={!active}
+          onChange={event => { setSearch(event.target.value); setSearched(false); }} /></label>
+        <button type="submit" disabled={!active || !search.trim()}>{c.pianoLessonFind}</button>
+      </form>
+    </div>
     {loadingScore && <p role="status">{c.pianoScoreLoading}</p>}
-    {searched && <div role="status">
+    {searched && <div className="piano-search-results" role="region" aria-label={ui.results}>
       {matches.map(match => <button key={match.id} type="button" disabled={!active}
-        onClick={() => { reset(); setSelected(match.id); setSearched(false); }}>{match.title} · {match.credit}</button>)
+        onClick={() => { reset(); setSelected(match.id); setSearched(false); }}>
+        <strong>{match.title}</strong><span>{match.credit}</span></button>)
       }
       {matchingScores.map(match => <button key={match.id} type="button" disabled={!active || loadingScore}
-        onClick={() => void loadScore(match)}>{match.title} · {match.artist} · {c.pianoScoreFull}</button>)}
-      {!matches.length && !matchingScores.length && <p>{c.pianoLessonNoMatch}</p>}
+        onClick={() => void loadScore(match)}><strong>{match.title}</strong><span>{match.artist} · {c.pianoScoreFull}</span></button>)}
+      {!matches.length && !matchingScores.length && <p role="status">{c.pianoLessonNoMatch}</p>}
     </div>}
-    <label>{c.pianoLessonTheme}<select value={selected} disabled={!active} onChange={event => { reset(); setSelected(event.target.value); }}>
-      <option value="beethoven">Beethoven · Ode to Joy</option>
-      <option value="mozart">Mozart · Ah! vous dirai-je, maman</option>
-      <option value="original">{c.pianoLessonOriginal}</option>
-      <option value="custom">{c.pianoLessonCustom}</option>
-      {score && <option value="score">{score.title}</option>}
-    </select></label>
-    {selected === 'custom' && <div className="piano-custom">
-      <p className="small">{c.pianoLessonRights}</p>
-      <label>{c.pianoLessonName}<input value={customTitle} maxLength={80} onChange={event => setCustomTitle(event.target.value)} /></label>
-      <label>{c.pianoLessonNotes}<textarea value={source} maxLength={1600} rows={3} onChange={event => setSource(event.target.value)} /></label>
-      <p className="small">{c.pianoLessonFormat}</p>
-      <label><input type="checkbox" checked={permission} onChange={event => setPermission(event.target.checked)} />{c.pianoLessonPermission}</label>
-      <button type="button" disabled={!active} onClick={loadCustom}>{c.pianoLessonLoad}</button>
-      <label>{c.pianoScoreUpload}<input type="file" accept=".mid,.midi,audio/midi,audio/x-midi"
-        disabled={!active || !permission || loadingScore} onChange={event => {
-          const file = event.target.files?.[0];
-          if (file) void loadScore(file);
-          event.target.value = '';
-        }} /></label>
-    </div>}
-    {piece && phrase && note && <>
-      <h4>{piece.title}</h4>
-      <p className="small">{piece.credit}</p>
-      {piece.source && <a href={piece.source} target="_blank" rel="noopener noreferrer">{c.pianoScoreSource}</a>}
+    {piece && phrase && note && <div className="piano-practice">
+      <div className="piano-score-heading">
+        <div><h4>{piece.title}</h4><p className="piano-credit">{piece.credit}</p></div>
+        <span className="piano-phrase-count">{c.pianoLessonPhrase} {phraseIndex + 1} / {piece.phrases.length}</span>
+      </div>
       {selected === 'score' && <label>{c.pianoScoreLine}<select value={lineIndex} disabled={!active || loadingScore}
         onChange={event => {
           const index = Number(event.target.value);
           reset(); setLineIndex(index); setScore(value => value ? { ...value, phrases: lines[index].phrases } : value);
         }}>{lines.map((line, index) => <option key={index} value={index}>{line.name}</option>)}</select></label>}
-      <p>{piece.tip[language]}</p>
-      <p>{c.pianoLessonPhrase} {phraseIndex + 1} / {piece.phrases.length} · {c.pianoLessonBeat} {note.beats}</p>
-      <div className="staff-scroll"><Staff phrase={phrase} current={noteIndex} label={c.pianoLessonNotation} /></div>
-      <p className="current-piano-note" aria-live={playing ? 'off' : 'polite'}>{c.pianoLessonPlay}: <strong>{note.pitch}</strong>
-        {note.finger ? ` · ${c.pianoLessonFinger} ${note.finger}` : ''}</p>
+      <div className="piano-note-focus">
+        <p className="current-piano-note" aria-live={playing ? 'off' : 'polite'}>{c.pianoLessonPlay}: <strong>{note.pitch}</strong>
+          {note.finger ? <span>{c.pianoLessonFinger} {note.finger}</span> : null}</p>
+        <span className="piano-beats">{c.pianoLessonBeat} {note.beats}</span>
+      </div>
+      <div className="staff-scroll" tabIndex={0} role="region" aria-label={c.pianoLessonNotation}>
+        <Staff phrase={phrase} current={noteIndex} label={c.pianoLessonNotation} />
+      </div>
+      <progress className="piano-phrase-progress" aria-label={ui.progress} max={phrase.length} value={noteIndex + 1} />
       {!!note.restBefore && <p className="small">{c.pianoScoreRest}: {Number(note.restBefore.toFixed(2))} {c.pianoLessonBeat}</p>}
-      <label>{c.pianoLessonTempo}<input type="range" min={30} max={100} step={5} value={tempo}
-        disabled={!active || playing} onChange={event => setTempo(Number(event.target.value))} /> {tempo} BPM</label>
-      <div className="teacher-session-actions">
-        <button type="button" disabled={!active || playing || noteIndex === 0} onClick={() => setNoteIndex(value => value - 1)}>{c.pianoLessonPrevious}</button>
-        <button type="button" disabled={!active || playing || noteIndex === phrase.length - 1} onClick={() => setNoteIndex(value => value + 1)}>{c.pianoLessonNext}</button>
-        <button type="button" disabled={!active} onClick={() => { setPlaying(false); audio.current?.stopAll(); setNoteIndex(0); }}>{c.pianoLessonRepeat}</button>
-        <button type="button" disabled={!active} aria-pressed={playing} onClick={() => {
+      <div className="piano-transport" role="group" aria-label={ui.transport}>
+        <button className="piano-follow" type="button" disabled={!active} aria-pressed={playing} onClick={() => {
           if (!playing && noteIndex === phrase.length - 1) setNoteIndex(0);
           setPlaying(value => !value);
         }}>{playing ? c.pianoLessonPause : c.pianoLessonFollow}</button>
         <button type="button" disabled={!active || playing || !soundAllowed} onClick={() => {
           void audio.current?.start(note.pitch).catch(failure => setError(failure instanceof Error ? failure.message : c.pianoUnavailable));
         }}>{c.pianoLessonHear}</button>
+        <button type="button" disabled={!active} onClick={() => { setPlaying(false); audio.current?.stopAll(); setNoteIndex(0); }}>{c.pianoLessonRepeat}</button>
+      </div>
+      <label className="piano-tempo">{c.pianoLessonTempo}<input type="range" min={30} max={100} step={5} value={tempo}
+        aria-valuetext={`${tempo} BPM`} disabled={!active || playing} onChange={event => setTempo(Number(event.target.value))} /><span>{tempo} BPM</span></label>
+      <div className="piano-navigation" role="group" aria-label={ui.navigation}>
+        <button type="button" disabled={!active || playing || noteIndex === 0} onClick={() => setNoteIndex(value => value - 1)}>{c.pianoLessonPrevious}</button>
+        <button type="button" disabled={!active || playing || noteIndex === phrase.length - 1} onClick={() => setNoteIndex(value => value + 1)}>{c.pianoLessonNext}</button>
         <button type="button" disabled={!active || playing || phraseIndex === 0}
           onClick={() => { setPhraseIndex(value => value - 1); setNoteIndex(0); }}>{c.pianoLessonBackPhrase}</button>
         <button type="button" disabled={!active || playing || phraseIndex === piece.phrases.length - 1}
           onClick={() => { setPhraseIndex(value => value + 1); setNoteIndex(0); }}>{c.pianoLessonNextPhrase}</button>
       </div>
-    </>}
+      <details className="piano-help">
+        <summary>{ui.guide}</summary>
+        <p>{piece.tip[language]}</p>
+        <p>{c.pianoLessonIntro}</p>
+        <p>{c.pianoLessonNoGrading}</p>
+      </details>
+      {piece.source && <a className="piano-source" href={piece.source} target="_blank" rel="noopener noreferrer">{c.pianoScoreSource}</a>}
+    </div>}
+    <details className="piano-import" open={importOpen} onToggle={event => setImportOpen(event.currentTarget.open)}>
+      <summary>{ui.import}</summary>
+      <div className="piano-custom">
+        <p className="small">{c.pianoLessonRights}</p>
+        <label>{c.pianoLessonName}<input value={customTitle} disabled={!active} maxLength={80} onChange={event => setCustomTitle(event.target.value)} /></label>
+        <label>{c.pianoLessonNotes}<textarea value={source} disabled={!active} maxLength={1600} rows={3} onChange={event => setSource(event.target.value)} /></label>
+        <p className="small">{c.pianoLessonFormat}</p>
+        <label className="piano-permission"><input type="checkbox" disabled={!active} checked={permission} onChange={event => setPermission(event.target.checked)} />{c.pianoLessonPermission}</label>
+        <button type="button" disabled={!active} onClick={loadCustom}>{c.pianoLessonLoad}</button>
+        <label>{c.pianoScoreUpload}<input type="file" accept=".mid,.midi,audio/midi,audio/x-midi"
+          disabled={!active || !permission || loadingScore} onChange={event => {
+            const file = event.target.files?.[0];
+            if (file) void loadScore(file);
+            event.target.value = '';
+          }} /></label>
+      </div>
+    </details>
     {error && <p role="alert" className="error-banner">{error}</p>}
-    <p className="small">{c.pianoLessonNoGrading}</p>
+    <p className="piano-privacy">{ui.privacy}</p>
   </section>;
 }

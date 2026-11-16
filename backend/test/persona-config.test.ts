@@ -70,9 +70,11 @@ test("tutor sends bounded single-call Q&A guidance for school, music, and langua
     assert.equal(endpoint.searchParams.get("api-version"), "2024-10-21");
     const payload = JSON.parse(String(init?.body)) as {
       max_tokens: number;
+      reasoning_effort: string;
       messages: { role: string; content: string }[];
     };
-    assert.ok(payload.max_tokens > 0 && payload.max_tokens <= 450);
+    assert.equal(payload.max_tokens, 2048);
+    assert.equal(payload.reasoning_effort, "low");
     const system = payload.messages[0]!.content;
     assert.match(system, /AI tutor, not a human/);
     assert.match(system, /10-year-old/);
