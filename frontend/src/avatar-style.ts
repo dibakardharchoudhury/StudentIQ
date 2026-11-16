@@ -3,13 +3,19 @@ export const avatarColors = {
   red: '#aa4835', orange: '#c77736', yellow: '#c69728', green: '#39785a',
   blue: '#386eb0', purple: '#7352bc', pink: '#b85185', teal: '#27858a',
 };
-type AvatarColor = keyof typeof avatarColors;
+export type AvatarColor = keyof typeof avatarColors;
+export const skinTones = {
+  porcelain: '#f6d8c4', light: '#f1bf9f', warm: '#dca578',
+  medium: '#bd805b', deep: '#8b563e', dark: '#593b30',
+};
 export type AvatarStyle = {
-  shirt: AvatarColor | 'theme'; hair: AvatarColor; hairLength: 'short' | 'long';
+  shirt: AvatarColor | 'theme'; hair: AvatarColor; hairLength: 'short' | 'long' | 'curly' | 'ponytail' | 'none';
+  skin: keyof typeof skinTones; eyes: AvatarColor; face: 'oval' | 'round';
   glasses: boolean; bow: boolean; badge: boolean;
 };
 export const defaultAvatar: AvatarStyle = {
   shirt: 'theme', hair: 'brown', hairLength: 'long', glasses: false, bow: false, badge: true,
+  skin: 'light', eyes: 'brown', face: 'oval',
 };
 
 const colors: Record<string, AvatarColor> = {

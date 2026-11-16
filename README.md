@@ -26,14 +26,40 @@ gaze. Learning scores are based on recorded practice, not attention.
 
 ## Learning activities
 
-Learning has separate **Question library**, **Mission**, **Talk to teacher**, and **Explore & play**
-spaces, with one activity visible at a time. Switching spaces preserves the
-current mission and unsent question. A compact tutor panel on phones keeps the
-activity within reach. Light violet and midnight themes are available from the
+Learning opens in one **teacher-led session**, with an optional day check-in,
+spoken conversation, matching visual answer choices and a ten-question lesson
+that can be ended early and resumed after refresh or a later sign-in. Non-piano
+daily lessons are stored privately on the server for each UTC date, subject and
+teaching language, shared by the authorized family. The date is labelled UTC.
+Only confirmed saved quiz grades count toward ten; extra questions are optional.
+Unrelated missions and library practice do not increase the daily lesson count.
+Language lessons offer an explicit Spanish, French or
+German choice before starting. Conversation begins only after the learner turns
+it on: each completed spoken turn is submitted automatically, listening pauses
+while the teacher replies, then resumes. Pausing voice keeps the lesson; ending
+the session releases voice resources. The greeting alone never activates audio
+or the microphone. The teacher portrait remains visible while scrolling, including
+on phones. The older **Question library**, **Mission**, **Talk to teacher**, and
+**Explore & play** spaces are available under collapsed **More activities**.
+Switching spaces preserves the current mission and unsent question.
+Light violet and midnight themes are available from the
 header; the theme choice is kept in the page URL, not personal-data storage.
 Learners can explore multiplication with a dot array, build English or
 Norwegian sentences, and select stages of the water cycle. The existing
-fraction explorer and piano remain available. **Coding & logic**, **Space explorers**,
+fraction explorer remains available. Piano opens a practical note-by-note lesson
+with visual staff notation, note letters, adjustable pace and phrase navigation
+for an actual piano. Alongside beginner themes and an original exercise, it bundles
+unchanged Mutopia public-domain complete MIDI sources for
+[Beethoven's Für Elise, WoO 59](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=931)
+and [Mozart's Menuet, K.2](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=1770).
+Accent-insensitive artist/title lookup converts these verified sources to notes.
+Authorized MIDI imports up to 1 MB are parsed only in browser memory, never uploaded;
+learners choose a MIDI part across A0–C8. The explicitly labelled single-note
+reduction selects the highest simultaneous note and clips overlaps, retaining
+beat values and rests in eight-note practice phrases—not measures or full chord
+engraving. Use the linked sources for full scores and fingering. Manual note input
+remains C4–C5. Modern copyrighted music requires an authorized user-provided MIDI;
+unknown titles are never replaced with invented versions. **Coding & logic**, **Space explorers**,
 **Animals & nature**, and **Art & design** add interest-led worlds, with authored
 practice and optional AI conversation/missions. Coding includes a local 5×5 robot
 board: build up to twelve arrow commands, trace a route, edit mistakes and reset.
@@ -48,12 +74,13 @@ quiz and piano practice history continue to be saved by the backend as before.
 Changing subjects or language, starting a new session, or opening an old one
 asks before clearing an unsent question.
 
-**Design your learning companion** changes the teacher immediately from a short
-English or Bokmål prompt, for example `purple hair, blue shirt and a bow`.
-Hair and shirt colours, hair length, glasses, a hair bow and a decorative star
-badge are supported in both the 3D
-avatar and its illustrated fallback. Unsupported requests or conflicting
-choices are reported without partially changing the avatar. This is local,
+**Design your learning companion** provides direct controls for skin shade,
+hairstyle, hair/eye/clothing colours, face shape, glasses, a bow and a decorative
+star badge. Both the 3D avatar and illustrated fallback update immediately.
+A limited English or Bokmål prompt shortcut also supports requests such as
+`purple hair, blue shirt and a bow`. Unsupported or conflicting prompt choices
+are reported without partially changing the avatar. Appearance is selected
+directly, not inferred from nationality. This is local,
 bounded styling, not AI image generation: prompts are not sent to a provider or
 saved. Changes survive activity switching in this tab, but reset on page reload;
 saved appearance, voice and mood preferences remain separate.

@@ -3,8 +3,10 @@ import { Speech } from './speech';
 
 const state = vi.hoisted(() => ({
   configure: vi.fn(() => ({})),
+  ssml: vi.fn(),
   recognizers: [] as {
     recognized?: (_: unknown, event: unknown) => void; close: ReturnType<typeof vi.fn>;
+    recognizing?: (_: unknown, event: unknown) => void;
     stopContinuousRecognitionAsync: ReturnType<typeof vi.fn>;
   }[],
   outputs: [] as { close: ReturnType<typeof vi.fn> }[],
@@ -12,6 +14,7 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock('microsoft-cognitiveservices-speech-sdk', () => ({
   SpeechConfig: { fromAuthorizationToken: state.configure },
+  PropertyId: { Speech_SegmentationSilenceTimeoutMs: 1 },
   Recognizer: { enableTelemetry: vi.fn() },
   SpeechSynthesisOutputFormat: { Audio24Khz48KBitRateMonoMp3: 1 },
   AudioConfig: {
@@ -21,6 +24,7 @@ vi.mock('microsoft-cognitiveservices-speech-sdk', () => ({
   },
   SpeechRecognizer: class {
     recognized?: (_: unknown, event: unknown) => void;
+    recognizing?: (_: unknown, event: unknown) => void;
     close = vi.fn();
     stopContinuousRecognitionAsync = vi.fn((done: () => void) => done());
     startContinuousRecognitionAsync = vi.fn((done: () => void) => done());
@@ -29,21 +33,41 @@ vi.mock('microsoft-cognitiveservices-speech-sdk', () => ({
   SpeechSynthesizer: class {
     close = vi.fn();
     constructor() { state.synthesizers.push(this); }
-    speakTextAsync = (_text: string, done: (value: unknown) => void) => done({
-      reason: 7, audioData: new ArrayBuffer(8),
-    });
+    speakSsmlAsync = (text: string, done: (value: unknown) => void) => {
+      state.ssml(text);
+      done({ reason: 7, audioData: new ArrayBuffer(8) });
+    };
   },
   ResultReason: { RecognizedSpeech: 3, SynthesizingAudioCompleted: 7 },
 }));
 
 beforeEach(() => {
   state.recognizers.length = 0; state.outputs.length = 0; state.synthesizers.length = 0;
-  state.configure.mockReset(); state.configure.mockImplementation(() => ({}));
+  state.configure.mockReset(); state.configure.mockImplementation(() => ({ setProperty: vi.fn() }));
+  state.ssml.mockReset();
   Object.defineProperty(window, 'isSecureContext', { value: true, configurable: true });
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('push-to-talk microphone lifecycle', () => {
+  it('shows interim words and automatically finishes a hands-free turn after a recognized phrase', async () => {
+    const stop = vi.fn();
+    Object.defineProperty(navigator, 'mediaDevices', {
+      value: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop }] }) }, configurable: true,
+    });
+    const transcript = vi.fn(), partial = vi.fn(), ready = vi.fn();
+    const speech = new Speech(async () => ({ token: 'test-token', region: 'norwayeast' }), vi.fn());
+    await speech.listen('en', transcript, vi.fn(), { partial, ready });
+    expect(ready).toHaveBeenCalledOnce();
+    state.recognizers[0].recognizing?.(null, { result: { text: 'I would like' } });
+    expect(partial).toHaveBeenCalledWith('I would like');
+    expect(transcript).not.toHaveBeenCalled();
+    state.recognizers[0].recognized?.(null, { result: { reason: 3, text: 'I would like a hint.' } });
+    expect(transcript).toHaveBeenCalledExactlyOnceWith('I would like a hint.');
+    expect(stop).toHaveBeenCalledOnce();
+    state.recognizers[0].recognizing?.(null, { result: { text: 'late words' } });
+    expect(partial).toHaveBeenCalledOnce();
+  });
   it('requests audio only on listen and immediately stops tracks on release, then emits the transcript', async () => {
     const stop = vi.fn();
     const getUserMedia = vi.fn().mockResolvedValue({ getTracks: () => [{ stop }] });
@@ -145,6 +169,16 @@ describe('Azure synthesis playback lifecycle', () => {
     const speech = new Speech(async () => ({ token: 'test-token', region: 'norwayeast' }), vi.fn());
     await expect(speech.say('Test fixture text', 'en')).rejects.toThrow('playback was blocked');
     expect(revoke).toHaveBeenCalledWith('blob:test-only-audio');
+  });
+  it('uses conversational SSML with gentle pacing and escapes text rather than interpreting markup', async () => {
+    const { audio } = audioFixture();
+    const speech = new Speech(async () => ({ token: 'test-token', region: 'norwayeast' }), vi.fn());
+    const pending = speech.say('Hello <friend> & welcome!', 'en');
+    await vi.waitFor(() => expect(audio.play).toHaveBeenCalled());
+    expect(state.ssml).toHaveBeenCalledWith(expect.stringContaining('<mstts:express-as style="chat">'));
+    expect(state.ssml).toHaveBeenCalledWith(expect.stringContaining('<prosody rate="-8%">Hello &lt;friend&gt; &amp; welcome!</prosody>'));
+    audio.onended?.();
+    await pending;
   });
   it('does not expose raw SDK diagnostics that could include an Entra credential', async () => {
     state.configure.mockImplementation(() => { throw new Error('SDK diagnostic containing aad#resource#private-test-token'); });

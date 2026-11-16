@@ -268,6 +268,19 @@ manipulation, or promise of live current events is used.
 
 ### Evidence-based quiz scores
 
+#### Durable daily teacher lessons
+
+* `GET /api/lessons/daily?subject=maths&language=en` reads/reconciles today's lesson without generating a question or consuming model quota. `subject=otherLanguages` restores the family's last explicitly started Spanish/French/German choice for that teaching language (Spanish before the first lesson).
+* `POST /api/lessons/daily/next` accepts `{subject, language, supportsNumberLine?: boolean}`. It returns the existing unanswered question, or issues the next question using the same generator, rotation, context and quota enforcement as `/api/quiz`.
+* `POST /api/lessons/daily/answer` accepts `{subject, language, date: "YYYY-MM-DD", quizId, answerIndex: 0..3}` and returns `{result, lesson}`. Only questions issued by that lesson can contribute. Same-choice retries return saved grading; changing a saved answer conflicts.
+* Lesson responses contain `{date, timeZone: "UTC", subject, language, target: 10, completed, current, answer}`. `current` is a public quiz question or null; `answer` is null until server grading is saved, then includes the real saved choice, correctness, answer index and explanation. Unanswered keys never leave storage.
+
+Private records live under `parents/{configured-family-oid}/lessons/{UTC-date}/{subject-language-hash}.json`, consistent with existing shared family quiz/history storage. They retain completed quiz IDs and the current public question, not conversation transcripts or new personal data. Optimistic ETag writes prevent duplicate counts and competing clients replacing an unanswered question. The immutable quiz answer remains authoritative: reads reconcile grading if the answer write succeeded but the aggregate lesson update or response failed. Clients must reconcile ambiguous answers rather than automatically resubmit them. Ordinary quiz/library practice is excluded unless its question was explicitly issued by the daily lesson. Ending early requires no destructive write; resuming restores the exact question and confirmed count. New UTC dates start at zero; optional extra questions have no ten-question cap and remain subject to the existing request quota.
+
+Regular quiz generation and daily-next failures may include a fixed `reason` alongside `category: "model"`: `upstream-unavailable`, `upstream-rate-limit`, `upstream-authentication`, `upstream-timeout`, `invalid-output`, `completion-limit`, or `filtered-output`. These codes do not expose provider payloads, exception messages or credentials, and do not trigger automatic grading retries.
+
+#### Quiz API
+
 * POST `/api/quiz` accepts exactly `{ "subject", "language": "en"|"nb" }`.
   It generates one structured four-option MCQ and confirms server-side storage
   of the question, answer key and explanation before returning **200**
@@ -412,6 +425,10 @@ labels through the Functions error logger. No exception messages/stacks,
 request URLs/bodies, parent/session IDs, headers, keys, or tokens are logged by
 application code. Expected validation/authentication/limit failures are not
 logged. Keep SDK HTTP/verbose diagnostics and body-capturing telemetry disabled.
+Generic 503 responses also include the same fixed `category` label, such as
+`model`, `context` or `persistence`, without raw error details. Clients must
+not mistake a 503 while creating the next quiz for an unsupported subject
+(422) or a reversal of a previously confirmed answer.
 Configure and test Azure AI Foundry input/output content filters for the
 selected model. The API replaces responses explicitly marked as filtered; this
 is not an independent safety classifier or a guarantee about model output.

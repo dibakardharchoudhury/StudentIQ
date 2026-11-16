@@ -90,6 +90,13 @@ const quizStateSchema = z.object({
   id, answer: quizAnswerSchema.extend({ answerIndex: z.number().int().min(0).max(3),
     explanation: z.string().trim().min(1).max(600) }).strict().nullable(),
 }).strict();
+const dailyLessonSchema = z.object({
+  date: z.iso.date(), timeZone: z.literal('UTC'),
+  subject: subjectSchema, language: languageSchema, target: z.literal(10),
+  completed: z.number().int().nonnegative(), current: quizSchema.nullable(),
+  answer: quizStateSchema.shape.answer,
+}).strict().refine(lesson => !lesson.answer || (!!lesson.current && lesson.completed > 0 &&
+  lesson.answer.correct === (lesson.answer.answerIndex === lesson.answer.correctIndex)));
 export type Language = z.infer<typeof languageSchema>;
 export type Session = z.infer<typeof sessionSchema>;
 export type SessionDetail = z.infer<typeof detailSchema>;
@@ -110,6 +117,7 @@ export type PianoAttempt = z.infer<typeof pianoAttemptSchema>;
 export type Preferences = z.infer<typeof preferencesSchema>;
 export type QuizQuestion = z.infer<typeof quizSchema>;
 export type QuizAnswer = z.infer<typeof quizAnswerSchema>;
+export type DailyLesson = z.infer<typeof dailyLessonSchema>;
 export type QuizAttempt = z.infer<typeof quizAttemptSchema>;
 export type LibraryEntry = z.infer<typeof libraryEntrySchema>;
 
@@ -153,7 +161,37 @@ export class Api {
     if (!response.ok) {
       if (response.status === 401) throw new ApiError('Your sign-in has expired. Sign out and sign in again.', 401);
       if (response.status === 403) throw new ApiError('This account is not allowed by the tutoring service. Contact the account administrator.', 403);
-      throw new ApiError(`Tutoring service error (${response.status}). Nothing has been marked successful.`, response.status);
+      const generatedQuestion = path === '/api/quiz' || path === '/api/lessons/daily/next';
+      if (generatedQuestion && response.status === 422) {
+        throw new ApiError('Generated questions are not supported for this subject. Choose another subject or use the question library.', 422);
+      }
+      if (generatedQuestion && response.status === 503) {
+        let category: unknown;
+        let reason: unknown;
+        if (response.headers.get('content-type')?.includes('application/json')) {
+          let body: unknown;
+          try { body = await response.json(); }
+          catch { throw new ApiError('The question service is temporarily unavailable (503), and its error details could not be read. Please try again.', 503); }
+          const parsed = z.object({ category: z.string(), reason: z.unknown().optional() }).safeParse(body);
+          if (parsed.success) { category = parsed.data.category; reason = parsed.data.reason; }
+        }
+        const detail = category === 'model' ? 'The question generator is temporarily unavailable'
+          : category === 'context' || category === 'persistence' ? 'Practice data could not be loaded or saved'
+          : category === 'quota-unavailable' ? 'The request limit could not be checked'
+          : 'The question service is temporarily unavailable';
+        const reasons: Record<string, string> = {
+          'upstream-unavailable': 'The question generator is temporarily unavailable',
+          'upstream-rate-limit': 'The question generator is busy; please wait before trying again',
+          'upstream-authentication': 'The question generator needs service configuration',
+          'upstream-timeout': 'The question generator took too long to respond',
+          'invalid-output': 'The question generator returned an unusable question',
+          'completion-limit': 'The generated question exceeded its response limit',
+          'filtered-output': 'The question generator could not provide a suitable question',
+        };
+        const safeDetail = category === 'model' && typeof reason === 'string' && Object.hasOwn(reasons, reason) ? reasons[reason] : detail;
+        throw new ApiError(`${safeDetail} (503). Your previous answers are unchanged. Please try loading a new question again.`, 503);
+      }
+      throw new ApiError(`Tutoring service error (${response.status}). The request did not complete; check saved records before retrying a submission.`, response.status);
     }
     return response;
   }
@@ -296,6 +334,24 @@ export class Api {
   }
   quiz(subject: string, language: Language, signal?: AbortSignal) {
     return this.request('/api/quiz', quizSchema, signal, { subject, language, supportsNumberLine: true });
+  }
+  dailyLesson(subject: string, language: Language, signal?: AbortSignal) {
+    return this.request(`/api/lessons/daily?${new URLSearchParams({ subject, language })}`, dailyLessonSchema, signal);
+  }
+  nextLessonQuestion(subject: string, language: Language, signal?: AbortSignal) {
+    return this.request('/api/lessons/daily/next', dailyLessonSchema, signal, { subject, language, supportsNumberLine: true });
+  }
+  async answerLesson(subject: string, language: Language, date: string, quizId: string, answerIndex: number, signal?: AbortSignal) {
+    if (!quizId || !Number.isInteger(answerIndex) || answerIndex < 0 || answerIndex > 3) {
+      throw new ApiError('Choose one of the four answers.');
+    }
+    const saved = await this.request('/api/lessons/daily/answer',
+      z.object({ result: quizAnswerSchema, lesson: dailyLessonSchema }).strict(), signal,
+      { subject, language, date, quizId, answerIndex });
+    if (saved.result.correct !== (answerIndex === saved.result.correctIndex) || saved.lesson.date !== date) {
+      throw new ApiError('API contract error: the saved lesson result is inconsistent.');
+    }
+    return saved;
   }
   async library(language: Language, signal?: AbortSignal): Promise<LibraryEntry[]> {
     const result = await this.request(`/api/library?${new URLSearchParams({ language })}`, librarySchema, signal);

@@ -11,8 +11,13 @@ vi.mock('./auth', () => ({
     signOut = state.signOut;
   },
 }));
-vi.mock('./api', () => ({
-  Api: class { sessions = state.sessions; me = state.me; },
+vi.mock('./api', async importOriginal => ({
+  ...await importOriginal<typeof import('./api')>(),
+  Api: class {
+    sessions = state.sessions; me = state.me;
+    dailyLesson = vi.fn().mockResolvedValue({ date: '2026-11-16', timeZone: 'UTC', subject: 'Maths', language: 'en',
+      completed: 0, target: 10, current: null, answer: null });
+  },
 }));
 vi.mock('./Teacher', () => ({ default: () => <div>Animation test placeholder</div> }));
 vi.mock('./speech', () => ({ Speech: class { cancel = vi.fn(); } }));
@@ -23,11 +28,16 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
+async function adminButton() {
+  fireEvent.click(await screen.findByText('School or work administrator'));
+  return screen.findByRole('button', { name: /Administrator sign-in/ });
+}
+
 describe('parent backend authorization gate', () => {
   it('does not open the workspace when Microsoft sign-in succeeds but the backend rejects the parent', async () => {
     state.sessions.mockRejectedValue(new Error('This parent is not allowed'));
     render(<App />);
-    const signIn = await screen.findByRole('button', { name: /Administrator sign-in/ });
+    const signIn = await adminButton();
     await waitFor(() => expect(signIn).toBeEnabled());
     fireEvent.click(signIn);
     expect(await screen.findByRole('alert')).toHaveTextContent('This parent is not allowed');
@@ -38,7 +48,7 @@ describe('parent backend authorization gate', () => {
     let allow!: (value: []) => void;
     state.sessions.mockReturnValue(new Promise(resolve => { allow = resolve; }));
     render(<App />);
-    const signIn = await screen.findByRole('button', { name: /Administrator sign-in/ });
+    const signIn = await adminButton();
     await waitFor(() => expect(signIn).toBeEnabled());
     fireEvent.click(signIn);
     await screen.findByRole('button', { name: /Checking account access/ });
@@ -56,7 +66,7 @@ describe('parent backend authorization gate', () => {
     state.sessions.mockResolvedValue([]);
     state.me.mockReturnValue(new Promise(resolve => { confirm = resolve; }));
     render(<App />);
-    const signIn = await screen.findByRole('button', { name: /Administrator sign-in/ });
+    const signIn = await adminButton();
     fireEvent.click(signIn);
     await waitFor(() => expect(state.me).toHaveBeenCalledOnce());
     expect(screen.queryByRole('button', { name: /Configuration/ })).not.toBeInTheDocument();
@@ -67,7 +77,7 @@ describe('parent backend authorization gate', () => {
     state.sessions.mockResolvedValue([]);
     state.me.mockResolvedValue({ role: 'parent' });
     render(<App />);
-    fireEvent.click(await screen.findByRole('button', { name: /Administrator sign-in/ }));
+    fireEvent.click(await adminButton());
     await screen.findByRole('heading', { name: 'What shall we discover today?' });
     expect(screen.queryByRole('button', { name: /Configuration/ })).not.toBeInTheDocument();
   });
@@ -75,7 +85,7 @@ describe('parent backend authorization gate', () => {
     state.sessions.mockResolvedValue([]);
     state.me.mockRejectedValue(new Error('Role unavailable'));
     render(<App />);
-    fireEvent.click(await screen.findByRole('button', { name: /Administrator sign-in/ }));
+    fireEvent.click(await adminButton());
     expect(await screen.findByRole('alert')).toHaveTextContent('Role unavailable');
     expect(screen.queryByRole('button', { name: /Configuration/ })).not.toBeInTheDocument();
   });
@@ -83,7 +93,8 @@ describe('parent backend authorization gate', () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
     state.sessions.mockResolvedValue([]);
     render(<App />);
-    fireEvent.click(await screen.findByRole('button', { name: /Administrator sign-in/ }));
+    fireEvent.click(await adminButton());
+    fireEvent.click(await screen.findByText('More activities'));
     const talk = await screen.findByRole('button', { name: 'Talk to teacher' });
     await waitFor(() => expect(talk).toBeEnabled());
     fireEvent.click(talk);

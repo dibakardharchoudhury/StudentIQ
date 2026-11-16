@@ -11,6 +11,8 @@ import { ReminderRepository } from "../src/reminders.js";
 import { PianoRepository } from "../src/piano.js";
 import { PreferencesRepository } from "../src/preferences.js";
 import { QuizRepository } from "../src/quiz.js";
+import { LessonRepository } from "../src/lessons.js";
+import { QuizGenerationError } from "../src/quiz-model.js";
 import { SocialDirectory } from "../src/social-directory.js";
 import { SOCIAL_ADMIN, SOCIAL_PARENT, SOCIAL_STUDENT } from "../src/auth.js";
 
@@ -67,6 +69,7 @@ const config = {
 
 function dependencies(authorize: ApiDependencies["authorize"]): ApiDependencies {
   const blobs = new MemoryBlobStore();
+  const quiz = new QuizRepository(blobs);
   return {
     config: { ...config },
     socialDirectory: new SocialDirectory(blobs, config.parentOid),
@@ -74,7 +77,8 @@ function dependencies(authorize: ApiDependencies["authorize"]): ApiDependencies 
     reminders: new ReminderRepository(blobs),
     piano: new PianoRepository(blobs),
     preferences: new PreferencesRepository(blobs, config.preferenceDefaults),
-    quiz: new QuizRepository(blobs),
+    quiz,
+    lessons: new LessonRepository(blobs, quiz),
     quizGenerator: { generate: async () => ({
       question: "What is 2 + 2?", options: ["3", "4", "5", "6"], correctIndex: 1,
       explanation: "Adding two and two gives four."
@@ -101,6 +105,83 @@ test("all application routes require a successful token validator", async () => 
   const allowed = dependencies(async () => config.parentOid);
   const health = await dispatch(request("health"), createOperations().health, allowed, { authenticated: false });
   assert.equal(health.status, 200);
+});
+
+test("daily lessons authenticate, resume without generation, share family progress and reconcile ordinary saved grading", async () => {
+  const operations = createOperations();
+  const denied = dependencies(async () => { throw new AuthenticationError(401); });
+  for (const operation of [operations.getLesson, operations.nextLesson, operations.answerLesson]) {
+    assert.equal((await dispatch(request("lessons/daily?subject=maths&language=en"), operation, denied)).status, 401);
+  }
+  const deps = dependencies(async () => SOCIAL_STUDENT);
+  let generationCalls = 0;
+  const generator = deps.quizGenerator.generate;
+  deps.quizGenerator.generate = async (...args) => { generationCalls++; return generator(...args); };
+  const get = () => dispatch(request("lessons/daily?subject=maths&language=en"), operations.getLesson, deps);
+  const next = () => dispatch(request("lessons/daily/next", {
+    method: "POST", body: JSON.stringify({ subject: "maths", language: "en", supportsNumberLine: true })
+  }), operations.nextLesson, deps);
+  assert.equal((await get()).status, 200);
+  assert.equal(generationCalls, 0);
+  const started = (await next()).jsonBody as {
+    date: string; current: { id: string; question: string }; completed: number; answer: unknown;
+  };
+  assert.ok(started.current.id);
+  assert.equal("correctIndex" in started.current, false);
+  assert.deepEqual((await next()).jsonBody, started);
+  assert.equal(generationCalls, 1);
+  deps.authorize = async () => SOCIAL_PARENT;
+  assert.deepEqual((await get()).jsonBody, started);
+  // An answer response lost before the lesson aggregate is saved is reconciled on GET.
+  await deps.quiz.answer(config.parentOid, started.current.id, 1);
+  const restored = await get();
+  assert.equal((restored.jsonBody as { completed: number }).completed, 1);
+  assert.equal(new Headers(restored.headers).get("Cache-Control"), "no-store");
+  const submit = (answerIndex: number) => dispatch(request("lessons/daily/answer", {
+    method: "POST", body: JSON.stringify({ subject: "maths", language: "en",
+      date: started.date, quizId: started.current.id, answerIndex })
+  }), operations.answerLesson, deps);
+  assert.equal((await submit(1)).status, 200);
+  assert.equal((await submit(0)).status, 409);
+  assert.equal((await get()).jsonBody && ((await get()).jsonBody as { completed: number }).completed, 1);
+  assert.equal(generationCalls, 1);
+  const invalid = await dispatch(request("lessons/daily?subject=maths&language=en&date=2026-01-01"), operations.getLesson, deps);
+  assert.equal(invalid.status, 400);
+});
+
+test("daily question issuance enforces existing quota and exposes only safe persistence failures", async () => {
+  const operations = createOperations();
+  const deps = dependencies(async () => config.parentOid);
+  deps.quota.consume = async () => { throw new QuotaUnavailableError(); };
+  const next = () => dispatch(request("lessons/daily/next", {
+    method: "POST", body: JSON.stringify({ subject: "maths", language: "en" })
+  }), operations.nextLesson, deps);
+  const unavailable = await next();
+  assert.equal(unavailable.status, 503);
+  assert.equal((unavailable.jsonBody as { category: string }).category, "quota-unavailable");
+  deps.lessons.get = async () => { throw new Error("PRIVATE storage detail"); };
+  const failed = await dispatch(request("lessons/daily?subject=maths&language=en"), operations.getLesson, deps);
+  assert.equal(failed.status, 503);
+  assert.equal((failed.jsonBody as { category: string }).category, "persistence");
+  assert.equal(JSON.stringify(failed).includes("PRIVATE"), false);
+});
+
+test("regular and daily quiz failures expose fixed model reason codes, never raw exception text", async () => {
+  const operations = createOperations();
+  for (const [path, operation] of [["quiz", operations.createQuiz], ["lessons/daily/next", operations.nextLesson]] as const) {
+    const deps = dependencies(async () => config.parentOid);
+    deps.quizGenerator.generate = async () => {
+      const error = new QuizGenerationError("completion-limit");
+      error.message = "PRIVATE provider payload";
+      throw error;
+    };
+    const response = await dispatch(request(path, { method: "POST",
+      body: JSON.stringify({ subject: "space", language: "en" }) }), operation, deps);
+    assert.equal(response.status, 503);
+    assert.deepEqual(response.jsonBody, { error: "The request could not be completed. Please try again.",
+      category: "model", reason: "completion-limit" });
+    assert.equal(JSON.stringify(response).includes("PRIVATE"), false);
+  }
 });
 
 test("library browsing, issuance, hints and grading need authorization but no model, context or quota calls", async () => {
@@ -869,6 +950,7 @@ test("quiz storage and model errors never fabricate questions or grades", async 
   blobs.failWritesContaining = "/quiz/questions/";
   const failedCreation = await dispatch(createRequest(), createOperations().createQuiz, deps);
   assert.equal(failedCreation.status, 503);
+  assert.equal((failedCreation.jsonBody as { category: string }).category, "persistence");
   assert.equal("question" in (failedCreation.jsonBody as object), false);
   blobs.failWritesContaining = undefined;
   deps.quizGenerator = { generate: async () => ({
@@ -885,5 +967,7 @@ test("quiz storage and model errors never fabricate questions or grades", async 
   deps.quizGenerator = { generate: async () => { throw new Error("private model exception"); } };
   const modelFailure = await dispatch(createRequest(), createOperations().createQuiz, deps);
   assert.equal(modelFailure.status, 503);
+  assert.equal((modelFailure.jsonBody as { category: string }).category, "model");
+  assert.equal(JSON.stringify(modelFailure.jsonBody).includes("private model exception"), false);
   assert.equal("question" in (modelFailure.jsonBody as object), false);
 });

@@ -6,7 +6,9 @@ import { copy } from './i18n';
 type GoogleIdentity = {
   accounts: { id: {
     initialize(config: { client_id: string; nonce: string; callback(response: { credential: string }): void }): void;
-    renderButton(element: HTMLElement, options: { theme: string; size: string }): void;
+    renderButton(element: HTMLElement, options: {
+      theme: string; size: string; text: string; shape: string; logo_alignment: string; width: number; locale: string;
+    }): void;
   } };
 };
 
@@ -24,6 +26,7 @@ export default function GoogleSignIn({ clientId, disabled, language, onCredentia
   callback.current = onCredential;
   useEffect(() => {
     let active = true;
+    let resize: ResizeObserver | undefined;
     const nonce = makeNonce();
     const initialize = () => {
       if (!active || !container.current) return;
@@ -32,8 +35,24 @@ export default function GoogleSignIn({ clientId, disabled, language, onCredentia
         client_id: clientId, nonce,
         callback: response => { if (active && response.credential) callback.current(response.credential, nonce); },
       });
-      container.current.replaceChildren();
-      window.google.accounts.id.renderButton(container.current, { theme: 'outline', size: 'large' });
+      let renderedWidth = 0;
+      const render = () => {
+        if (!active || !container.current || !window.google) return;
+        const width = Math.min(400, Math.max(200, Math.floor(container.current.getBoundingClientRect().width || 360)));
+        if (width === renderedWidth) return;
+        renderedWidth = width;
+        container.current.replaceChildren();
+        window.google.accounts.id.renderButton(container.current, {
+          theme: 'outline', size: 'large', text: 'continue_with', shape: 'rectangular', logo_alignment: 'left',
+          width,
+          locale: language === 'nb' ? 'no' : 'en',
+        });
+      };
+      render();
+      if (typeof ResizeObserver !== 'undefined') {
+        resize = new ResizeObserver(render);
+        resize.observe(container.current);
+      }
     };
     let script: HTMLScriptElement | undefined;
     if (window.google) initialize();
@@ -47,10 +66,11 @@ export default function GoogleSignIn({ clientId, disabled, language, onCredentia
     }
     return () => {
       active = false;
+      resize?.disconnect();
       if (script) { script.onload = null; script.onerror = null; script.remove(); }
     };
-  }, [clientId, attempt]);
-  return <div>
+  }, [clientId, language, attempt]);
+  return <div className="google-signin">
     <div ref={container} inert={disabled} />
     {failure && <div>
       <p role="alert">{copy(language).googleLoadError}</p>

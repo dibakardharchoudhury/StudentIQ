@@ -22,6 +22,7 @@ import AvatarCustomizer from './AvatarCustomizer';
 import QuestionLibrary from './QuestionLibrary';
 import RobotExplorer from './RobotExplorer';
 import BuddyBreak from './BuddyBreak';
+import TeacherSession from './TeacherSession';
 import { defaultAvatar, type AvatarStyle } from './avatar-style';
 
 type Runtime = { auth: ParentAuth; api: Api; config: AppConfig };
@@ -182,18 +183,15 @@ export default function App() {
             <h2 id="signin-title">{c.signinTitle}</h2>
             <p className="small">{c.signinHint}</p>
             <div className="signin-family">
-              <details className="signin-access-code">
-                <summary>{c.accessCodeTitle}</summary>
-                <label>{c.accessCodeLabel}<input type="text" value={invitationCode} disabled={authBusy}
-                  onChange={event => setInvitationCode(event.target.value.trim())} maxLength={32}
-                  autoComplete="off" autoCapitalize="none" spellCheck={false} aria-describedby="signin-code-hint" /></label>
-                <p id="signin-code-hint" className="small">{c.accessCodeHint}</p>
-              </details>
               {error && <div className="signin-feedback" ref={signinFeedback} tabIndex={-1}>
                 <ErrorBanner title={c.signinNoticeTitle} text={error} dismiss={() => setError('')} label={c.dismiss} />
               </div>}
-              {runtime?.config.microsoftPersonalClientId && <button className="primary" disabled={authBusy || !online}
-                onClick={() => void signIn(auth => auth.signInMicrosoft(invitationCode || undefined), true)}>{c.microsoftStudent}</button>}
+              {runtime?.config.microsoftPersonalClientId && <button className="signin-provider" disabled={authBusy || !online}
+                onClick={() => void signIn(auth => auth.signInMicrosoft(invitationCode || undefined), true)}>
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                  <path fill="#f25022" d="M1 1h10v10H1z" /><path fill="#7fba00" d="M13 1h10v10H13z" />
+                  <path fill="#00a4ef" d="M1 13h10v10H1z" /><path fill="#ffb900" d="M13 13h10v10H13z" />
+                </svg><span>{c.microsoftStudent}</span></button>}
               {!runtime ? <p role="status">{c.loading}</p> : runtime.config.googleClientId
                 ? <GoogleSignIn clientId={runtime.config.googleClientId} language={language} disabled={authBusy || !online}
                   onCredential={(token, nonce) => void signIn(auth => auth.exchange('google', token, nonce, invitationCode || undefined), true)} />
@@ -203,13 +201,21 @@ export default function App() {
                     <a href="https://console.cloud.google.com/auth/clients" target="_blank" rel="noreferrer">{c.googleSetupLink}</a>
                   </details>
                 </div>}
+              <details className="signin-access-code">
+                <summary>{c.accessCodeTitle}</summary>
+                <label>{c.accessCodeLabel}<input type="text" value={invitationCode} disabled={authBusy}
+                  onChange={event => setInvitationCode(event.target.value.trim())} maxLength={32}
+                  autoComplete="off" autoCapitalize="none" spellCheck={false} aria-describedby="signin-code-hint" /></label>
+                <p id="signin-code-hint" className="small">{c.accessCodeHint}</p>
+              </details>
             </div>
-            <div className="signin-admin">
-              <h3>{c.adminSigninTitle}</h3><p className="small">{c.adminSigninHint}</p>
+            <details className="signin-admin">
+              <summary>{c.adminSigninTitle}</summary>
+              <p className="small">{c.adminSigninHint}</p>
               <button className="quiet" onClick={() => void signIn(auth => auth.signIn())} disabled={!runtime || authBusy || !online}>
                 {authBusy ? c.signingIn : !runtime ? c.loading : c.signIn}<span aria-hidden="true"> ↗</span>
               </button>
-            </div>
+            </details>
           </section>}
           {authBusy && <p className="small" role="status">{c.loadingHistory}</p>}
           <p className="small">{c.parentNote}</p>
@@ -257,7 +263,11 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
   const c = copy(language);
   const [localAvatarStyle, setLocalAvatarStyle] = useState<AvatarStyle>(defaultAvatar);
   const [view, setView] = useState<View>('learn');
-  const [learningPane, setLearningPane] = useState<'mission' | 'talk' | 'explore' | 'library'>('mission');
+  const [learningPane, setLearningPane] = useState<'teacher' | 'mission' | 'talk' | 'explore' | 'library'>('teacher');
+  const [teacherSession, setTeacherSession] = useState(0);
+  const [teacherBusy, setTeacherBusy] = useState(false);
+  const [teacherHasDraft, setTeacherHasDraft] = useState(false);
+  const [moreActivities, setMoreActivities] = useState(false);
   const [mathActivity, setMathActivity] = useState<'array' | 'fraction'>('array');
   const [configView, setConfigView] = useState<'people' | 'calendar'>('people');
   const [subject, setSubject] = useState('maths');
@@ -288,7 +298,7 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
   const [sessionClock, setSessionClock] = useState(0);
   const [preferences, setPreferences] = useState<Preferences | null>(null);
   const [preferencesBusy, setPreferencesBusy] = useState(false);
-  const toolBusy = plannerBusy || pianoBusy || quizBusy || libraryBusy;
+  const toolBusy = plannerBusy || pianoBusy || quizBusy || libraryBusy || teacherBusy;
   const request = useRef<AbortController | null>(null);
   const locked = useRef(false);
   const alive = useRef(true);
@@ -301,7 +311,7 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
   const subjectChooser = useRef<HTMLDetailsElement>(null);
   const lessonLanguage = useRef(language);
 
-  useEffect(() => { onDraftChange?.(!!draft.trim()); }, [draft, onDraftChange]);
+  useEffect(() => { onDraftChange?.(!!draft.trim() || teacherHasDraft); }, [draft, teacherHasDraft, onDraftChange]);
   useEffect(() => () => { onDraftChange?.(false); }, [onDraftChange]);
   useEffect(() => {
     onBusyChange?.(busy || toolBusy || preferencesBusy || mic !== 'off');
@@ -371,8 +381,9 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
   }
   function newSession(nextSubject = subject) {
     if (locked.current) return;
-    if (draft.trim() && !window.confirm(c.discardDraft)) return;
+    if ((draft.trim() || teacherHasDraft) && !window.confirm(c.discardDraft)) return;
     cancelVoice(); setSubject(nextSubject);
+    setTeacherSession(value => value + 1);
     setSessionId(undefined); setDetail(null); setExchanges([]); setDraft(''); setStatus(''); setError('');
     setView('learn');
     setPaused(false); setBreakSuggested(false); setSessionClock(value => value + 1);
@@ -390,7 +401,7 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
     } finally { endRequest(controller); }
   }
   async function open(session: Session) {
-    if (draft.trim() && !window.confirm(c.discardDraft)) return;
+    if ((draft.trim() || teacherHasDraft) && !window.confirm(c.discardDraft)) return;
     const controller = beginRequest(true);
     if (!controller) return;
     try {
@@ -552,21 +563,22 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
       </section>
       <div className="learning-layout">
       <aside className="teacher-panel">
+        <div className="teacher-presence">
         <div className="panel-heading"><span className="eyebrow">StudentIQ</span><span className="live-dot">{c.ready}</span></div>
         <Teacher speaking={speaking} appearance={preferences?.appearance} mood={preferences?.mood}
           label={speaking ? c.teacherSpeaking : c.teacherIdle} customization={avatarStyle ?? localAvatarStyle} />
+        </div>
         <AvatarCustomizer value={avatarStyle ?? localAvatarStyle} onChange={onAvatarChange ?? setLocalAvatarStyle}
           language={language} disabled={disabled || toolBusy} />
         <BuddyBreak language={language} disabled={disabled || toolBusy} />
         <p className="small teacher-note">{c.teacherNote}</p>
-        <button type="button" className="talk-shortcut" disabled={disabled || toolBusy} onClick={() => {
-          if (learningPane === 'talk') textarea.current?.focus();
-          else { focusDraft.current = true; setLearningPane('talk'); }
-        }}>{c.talkJump}</button>
+        {learningPane !== 'teacher' && <><button type="button" className="talk-shortcut" disabled={disabled || toolBusy} onClick={() => {
+          cancelVoice(); setLearningPane('teacher');
+        }}>{c.teacherBack}</button>
         <button className="voice-toggle" disabled={paused} aria-pressed={!muted} onClick={toggleMute}>
           <span aria-hidden="true">{muted ? '◌' : '♪'}</span> {muted ? c.unmute : c.mute}
         </button>
-        <p className="small">{muted ? c.muted : c.voice}</p>
+        <p className="small">{muted ? c.muted : c.voice}</p></>}
         <TeacherSettings api={api} language={language} disabled={busy || toolBusy || paused || mic !== 'off'} online={online}
           onBusyChange={setPreferencesBusy} onChange={value => { cancelVoice(); setPreferences(value); }} />
         <div className="privacy-strip compact"><span aria-hidden="true">◇</span><p>{c.privateNote}</p></div>
@@ -586,10 +598,24 @@ export function Workspace({ api, initialSessions, language, setLanguage, online,
             }}><span className="subject-icon" aria-hidden="true"><SubjectIcon subject={value} /></span> {subjectLabel(value, language)}</button>)}
         </div>
         </details>
+        {learningPane !== 'teacher' && <button type="button" disabled={disabled || toolBusy}
+          onClick={() => { cancelVoice(); setLearningPane('teacher'); }}>{c.teacherBack}</button>}
+        <details className="more-activities" open={moreActivities}>
+        <summary onClick={event => { event.preventDefault(); setMoreActivities(value => !value); }}>{c.teacherMoreActivities}</summary>
+        <div hidden={!moreActivities}>
+        <p className="small">{c.teacherOptional}</p>
         <div className="learning-modes" role="group" aria-label={c.learningModes}>
           {([['library', c.libraryMode], ['mission', c.missionMode], ['talk', c.talkMode], ['explore', c.exploreMode]] as const).map(([pane, label]) =>
             <button type="button" key={pane} aria-pressed={learningPane === pane} disabled={disabled || toolBusy}
               onClick={() => { cancelVoice(); setLearningPane(pane); }}>{label}</button>)}
+        </div>
+        </div>
+        </details>
+        <div hidden={learningPane !== 'teacher'}>
+          <TeacherSession key={`${subject}-${language}-${teacherSession}`} api={api} subject={subject} language={language}
+            preferences={preferences} online={online}
+            active={learningPane === 'teacher' && view === 'learn' && !paused && !preferencesBusy}
+            onSpeaking={setSpeaking} onBusyChange={setTeacherBusy} onDraftChange={setTeacherHasDraft} />
         </div>
         <div hidden={learningPane !== 'mission'}>
         <p className="qa-note">{c.qaNote}</p>

@@ -27,6 +27,9 @@ it('offers a localized retry and passes the new nonce with the credential', () =
   options.callback({ credential: 'test-credential' });
   expect(onCredential).toHaveBeenCalledWith('test-credential', 'retry-nonce');
   expect(renderButton).toHaveBeenCalledOnce();
+  expect(renderButton.mock.calls[0][1]).toMatchObject({
+    text: 'continue_with', shape: 'rectangular', width: 360, locale: 'no',
+  });
 });
 
 it('reports a script that loads without the Google API', () => {

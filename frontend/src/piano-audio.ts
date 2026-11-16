@@ -1,14 +1,15 @@
-import { pianoNotes, type PianoNote } from './api';
+import { pitchMidi, type ScorePitch } from './piano-score';
 
 type Voice = { oscillator?: OscillatorNode; gain?: GainNode };
 
 export class PianoAudio {
   private context?: AudioContext;
-  private voices = new Map<PianoNote, Voice>();
+  private voices = new Map<ScorePitch, Voice>();
   private disposed = false;
 
-  async start(note: PianoNote) {
+  async start(note: ScorePitch) {
     if (this.disposed || this.voices.has(note)) return;
+    const midi = pitchMidi(note);
     // Called only from pointer/keyboard gestures, never from mounting or backend replies.
     const Audio = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Audio) throw new Error('Web Audio is unavailable. You can still select a note for practice.');
@@ -23,7 +24,7 @@ export class PianoAudio {
       const gain = context.createGain();
       voice.oscillator = oscillator; voice.gain = gain;
       oscillator.type = 'triangle';
-      oscillator.frequency.value = 440 * 2 ** ((60 + pianoNotes.indexOf(note) - 69) / 12);
+      oscillator.frequency.value = 440 * 2 ** ((midi - 69) / 12);
       gain.gain.setValueAtTime(0, context.currentTime);
       gain.gain.linearRampToValueAtTime(.12, context.currentTime + .015);
       gain.gain.exponentialRampToValueAtTime(.025, context.currentTime + 1.8);
@@ -39,7 +40,7 @@ export class PianoAudio {
       throw new Error('Piano sound could not start. Check sound permissions or use silent note selection.');
     }
   }
-  stop(note: PianoNote) {
+  stop(note: ScorePitch) {
     const voice = this.voices.get(note);
     this.voices.delete(note);
     if (!voice?.oscillator || !voice.gain || !this.context) return;

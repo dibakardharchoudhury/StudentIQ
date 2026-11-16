@@ -2,7 +2,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import type { Camera, Mesh, MeshStandardMaterial, Scene } from 'three';
 import Teacher from './Teacher';
-import { defaultAvatar } from './avatar-style';
+import { defaultAvatar, skinTones, avatarColors } from './avatar-style';
 
 const state = vi.hoisted(() => ({
   unavailable: true,
@@ -92,6 +92,14 @@ it('shows the human fallback immediately, before the asynchronous renderer can l
   expect(container.querySelector('.teacher-canvas')).toHaveAttribute('hidden');
   expect(state.renderers).toHaveLength(0);
   unmount();
+});
+
+it('reflects chosen skin, eyes and hairstyle in the immediate fallback preview', () => {
+  const { container } = render(<Teacher speaking={false} label="Preview"
+    customization={{ ...defaultAvatar, skin: 'deep', eyes: 'green', hairLength: 'none', face: 'round' }} />);
+  expect(container.querySelector('[data-feature="skin"]')).toHaveAttribute('fill', skinTones.deep);
+  expect(container.querySelector('[data-feature="eyes"]')).toHaveAttribute('fill', avatarColors.green);
+  expect(container.querySelector(`path[fill="${avatarColors.brown}"]`)).not.toBeInTheDocument();
 });
 
 it('updates the live renderer and illustrated fallback together when the child changes style', async () => {

@@ -12,6 +12,14 @@ export const speechVoice = (language: Language, voice: Preferences['voice'] = 'd
   ? voice === 'alternate' ? 'nb-NO-FinnNeural' : 'nb-NO-PernilleNeural'
   : voice === 'alternate' ? 'en-US-AriaNeural' : 'en-US-JennyNeural';
 
+function speechMarkup(text: string, language: Language, voice: Preferences['voice']) {
+  const escaped = text.replace(/[<>&"']/g, character => ({
+    '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;',
+  })[character]!);
+  const delivery = `<prosody rate="-8%">${escaped}</prosody>`;
+  return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="${speechLocale(language)}"><voice name="${speechVoice(language, voice)}">${language === 'en' ? `<mstts:express-as style="chat">${delivery}</mstts:express-as>` : delivery}</voice></speak>`;
+}
+
 export class Speech {
   private generation = 0;
   private stream?: MediaStream;
@@ -34,7 +42,8 @@ export class Speech {
 
   get active() { return !this.stopped; }
 
-  async listen(language: Language, transcript: (text: string) => void, failed: (error: Error) => void) {
+  async listen(language: Language, transcript: (text: string) => void, failed: (error: Error) => void,
+    turn?: { partial(text: string): void; ready(): void }) {
     this.cancel();
     const generation = this.generation;
     this.stopped = false;
@@ -57,12 +66,17 @@ export class Speech {
       this.timer = setTimeout(() => this.stopListening(), 30_000);
       const config = sdk.SpeechConfig.fromAuthorizationToken(authorization.token, authorization.region);
       config.speechRecognitionLanguage = speechLocale(language);
+      if (turn) config.setProperty(sdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, '1200');
       this.input = sdk.AudioConfig.fromStreamInput(stream);
       const recognizer = new sdk.SpeechRecognizer(config, this.input);
       this.recognizer = recognizer;
+      recognizer.recognizing = (_, event) => {
+        if (generation === this.generation && !this.stopped) turn?.partial(event.result.text);
+      };
       recognizer.recognized = (_, event) => {
         if (generation === this.generation && event.result.reason === sdk.ResultReason.RecognizedSpeech) {
           this.text = `${this.text} ${event.result.text}`.trim();
+          if (turn && !this.stopped && this.text) this.stopListening();
         }
       };
       recognizer.canceled = (_, event) => {
@@ -76,6 +90,7 @@ export class Speech {
       };
       await new Promise<void>((resolve, reject) => recognizer.startContinuousRecognitionAsync(resolve, reject));
       if (generation !== this.generation) return;
+      turn?.ready();
     } catch (error) {
       if (generation !== this.generation) return;
       this.fail(error instanceof ApiError ? error :
@@ -126,7 +141,7 @@ export class Speech {
       this.synthesizer = new sdk.SpeechSynthesizer(config, null);
       const data = await new Promise<ArrayBuffer | undefined>((resolve, reject) => {
         this.settle = () => resolve(undefined);
-        this.synthesizer!.speakTextAsync(text, result => {
+        this.synthesizer!.speakSsmlAsync(speechMarkup(text, language, voice), result => {
           if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) resolve(result.audioData);
           else reject(new SpeechError('Azure speech could not play this reply. The text is still available.'));
         }, () => reject(new SpeechError('Speech playback failed. The text is still available.')));

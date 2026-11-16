@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Material } from 'three';
 import type { Preferences } from './api';
-import { avatarColors, defaultAvatar, type AvatarStyle } from './avatar-style';
+import { avatarColors, skinTones, defaultAvatar, type AvatarStyle } from './avatar-style';
 
 // Character colors stay human in both themes; the cardigan follows the app palette.
 const portrait = { skin: '#f1bf9f', hair: '#49312e', blush: '#df8d89', white: '#fff5e8', ink: '#352a30' };
@@ -51,12 +51,13 @@ export default function Teacher({ speaking, label, appearance = 'rose', mood = '
       container.appendChild(renderer.domElement);
       renderer.domElement.setAttribute('aria-hidden', 'true');
       const color = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-      const skin = own(new THREE.MeshStandardMaterial({ color: portrait.skin, roughness: .8 }));
+      const skin = own(new THREE.MeshStandardMaterial({ color: skinTones[customization.skin], roughness: .8 }));
       const hair = own(new THREE.MeshStandardMaterial({ color: avatarColors[customization.hair], roughness: .75 }));
       const clothing = own(new THREE.MeshStandardMaterial({ roughness: .9 }));
       const collar = own(new THREE.MeshStandardMaterial({ color: portrait.white, roughness: .9 }));
       const eyeWhite = own(new THREE.MeshBasicMaterial({ color: portrait.white }));
       const ink = own(new THREE.MeshBasicMaterial({ color: portrait.ink }));
+      const pupil = own(new THREE.MeshBasicMaterial({ color: avatarColors[customization.eyes] }));
       const badgeColor = own(new THREE.MeshBasicMaterial());
       const updateColors = () => {
         clothing.color.set(customization.shirt === 'theme' ? color(outfit[appearance]) || portrait.blush : avatarColors[customization.shirt]);
@@ -114,19 +115,27 @@ export default function Teacher({ speaking, label, appearance = 'rose', mood = '
       const head = new THREE.Group();
       head.position.set(0, .66, 0);
       teacher.add(head);
+      if (customization.hairLength !== 'none') {
       part(hair, [.73, .86, .51], [0, .02, -.12], head);
       for (const side of [-1, 1]) {
         part(hair, [.17, customization.hairLength === 'long' ? .48 : .23, .25],
           [side * .60, customization.hairLength === 'long' ? -.17 : .13, -.01], head);
       }
+      if (customization.hairLength === 'curly') {
+        for (let curl = 0; curl < 7; curl++) part(hair, [.19, .20, .20], [-.6 + curl * .2, .62 + Math.sin(curl * Math.PI / 6) * .18, .24], head);
+      }
+      if (customization.hairLength === 'ponytail') part(hair, [.27, .53, .28], [.70, -.22, -.23], head);
+      }
       part(skin, [.14, .20, .13], [-.63, -.07, .08], head);
       part(skin, [.14, .20, .13], [.63, -.07, .08], head);
-      part(skin, [.64, .75, .53], [0, 0, .06], head);
+      part(skin, [customization.face === 'round' ? .69 : .64, customization.face === 'round' ? .69 : .75, .53], [0, 0, .06], head);
+      if (customization.hairLength !== 'none') {
       const fringeLeft = part(hair, [.47, .20, .19], [-.24, .56, .39], head);
       fringeLeft.rotation.z = .35;
       const fringeRight = part(hair, [.29, .17, .18], [.37, .59, .34], head);
       fringeRight.rotation.z = -.5;
       part(hair, [.31, .16, .19], [-.17, .75, .12], head).rotation.z = .15;
+      }
       if (customization.bow) {
         const bow = new THREE.Group();
         bow.name = 'companion-hair-bow'; head.add(bow);
@@ -141,8 +150,8 @@ export default function Teacher({ speaking, label, appearance = 'rose', mood = '
       head.add(eyes);
       part(eyeWhite, [.125, .145, .04], [-.235, .06, .55], eyes);
       part(eyeWhite, [.125, .145, .04], [.235, .06, .55], eyes);
-      part(ink, [.06, .09, .02], [-.225, .055, .595], eyes);
-      part(ink, [.06, .09, .02], [.225, .055, .595], eyes);
+      part(pupil, [.06, .09, .02], [-.225, .055, .595], eyes);
+      part(pupil, [.06, .09, .02], [.225, .055, .595], eyes);
       part(eyeWhite, [.025, .03, .012], [-.247, .09, .634], eyes);
       part(eyeWhite, [.025, .03, .012], [.203, .09, .634], eyes);
       const leftBrow = part(hair, [.125, .027, .025], [-.235, .30, .53], head);
@@ -267,31 +276,35 @@ export default function Teacher({ speaking, label, appearance = 'rose', mood = '
       if (!disposed) setStatus('unavailable');
     });
     return () => { disposed = true; cleanup(); };
-  }, [appearance, mood, customization.shirt, customization.hair, customization.hairLength, customization.glasses, customization.bow, customization.badge]);
+  }, [appearance, mood, customization.shirt, customization.hair, customization.hairLength, customization.glasses, customization.bow, customization.badge, customization.skin, customization.eyes, customization.face]);
 
   return <div className="teacher-stage" role="img" aria-label={label}>
     <div className="teacher-orbit" aria-hidden="true" />
     <div ref={host} className="teacher-canvas" hidden={status !== 'ready'} />
     {status !== 'ready' && <div className="teacher-fallback" aria-hidden="true">
       <svg viewBox="0 0 200 220" focusable="false" style={{ overflow: 'visible' }}>
-        <g fill={avatarColors[customization.hair]}>
+        {customization.hairLength !== 'none' && <g fill={avatarColors[customization.hair]}>
           <path d="M47 98C25 12 158 0 154 86l-2 49H47Z" />
           {customization.hairLength === 'long' && <><ellipse cx="46" cy="111" rx="14" ry="31" /><ellipse cx="151" cy="111" rx="14" ry="31" /></>}
-        </g>
+          {customization.hairLength === 'ponytail' && <ellipse cx="159" cy="112" rx="20" ry="38" />}
+        </g>}
         <g fill={customization.shirt === 'theme' ? `var(${outfit[appearance]})` : avatarColors[customization.shirt]}>
           <path d="M31 220v-29c0-34 25-53 68-53s64 19 64 53v29Z" />
           <path d="M39 168q-17 9-13 36l18 1 11-27ZM153 168q17 9 13 36l-18 1-11-27Z" />
         </g>
-        <g fill={portrait.skin}>
+        <g fill={skinTones[customization.skin]} data-feature="skin">
           <path d="M86 121h26v29q-13 13-26 0Z" />
           <ellipse cx="46" cy="88" rx="10" ry="15" /><ellipse cx="151" cy="88" rx="10" ry="15" />
           <path d="M27 202q-4 14 5 16h8q8-2 3-15ZM149 203q-5 13 3 15h8q9-2 5-16Z" />
-          <path d="M49 73q-1-44 49-44t50 44v23c0 31-22 49-49 49S49 127 49 96Z" />
+          <path d={customization.face === 'round' ? 'M44 76q0-43 55-43t55 43v18c0 29-25 46-55 46S44 123 44 94Z' : 'M49 73q-1-44 49-44t50 44v23c0 31-22 49-49 49S49 127 49 96Z'} />
         </g>
         <path fill={portrait.white} d="m87 142 12 9-9 7-9-9Zm24 0-12 9 9 7 9-9Z" />
         {customization.badge && <path data-accessory="badge" fill="var(--cp-warning)"
           d="m69 164 3 7 8 1-6 5 2 8-7-4-7 4 2-8-6-5 8-1Z" />}
-        <path fill={avatarColors[customization.hair]} d="M46 76C37 31 63 17 95 18c38-2 62 26 57 59-16-3-27-15-33-29-15 18-39 24-73 28Z" />
+        {customization.hairLength !== 'none' && <path fill={avatarColors[customization.hair]} d="M46 76C37 31 63 17 95 18c38-2 62 26 57 59-16-3-27-15-33-29-15 18-39 24-73 28Z" />}
+        {customization.hairLength === 'curly' && <g fill={avatarColors[customization.hair]}>
+          {Array.from({ length: 7 }, (_, index) => <circle key={index} cx={48 + index * 17} cy={38 - Math.sin(index * Math.PI / 6) * 13} r="14" />)}
+        </g>}
         {customization.bow ? <g data-accessory="bow" fill={customization.shirt === 'theme' ? `var(${outfit[appearance]})` : avatarColors[customization.shirt]}>
           <path d="m140 57-10-9q-8 12 0 18Zm0 0 10-9q8 12 0 18Z" />
           <circle cx="140" cy="57" r="3" fill={portrait.white} />
@@ -299,7 +312,7 @@ export default function Teacher({ speaking, label, appearance = 'rose', mood = '
         <g fill={portrait.white}>
           <ellipse cx="78" cy="88" rx="11" ry="13" /><ellipse cx="121" cy="88" rx="11" ry="13" />
         </g>
-        <g fill={portrait.ink}>
+        <g fill={avatarColors[customization.eyes]} data-feature="eyes">
           <ellipse cx="79" cy="89" rx="6" ry="9" /><ellipse cx="120" cy="89" rx="6" ry="9" />
         </g>
         <g fill={portrait.white}>

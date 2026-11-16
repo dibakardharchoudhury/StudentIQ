@@ -61,6 +61,56 @@ describe('backend roles, planning and preferences', () => {
 });
 
 describe('piano and quiz contracts', () => {
+  it('loads durable UTC lessons and validates grading without an automatic answer retry', async () => {
+    const lesson = { date: '2026-11-16', timeZone: 'UTC', subject: 'Maths', language: 'en',
+      completed: 0, target: 10, current: { id: 'quiz', question: 'A fixture?', options: ['A', 'B', 'C', 'D'] }, answer: null };
+    fetchMock.mockResolvedValueOnce(json(lesson)).mockResolvedValueOnce(json(lesson));
+    const client = api();
+    expect(await client.dailyLesson('maths', 'en')).toEqual(lesson);
+    expect(fetchMock.mock.calls[0][0]).toBe('https://test.example/api/lessons/daily?subject=maths&language=en');
+    expect(await client.nextLessonQuestion('maths', 'en')).toEqual(lesson);
+    expect(JSON.parse(fetchMock.mock.calls[1][1]!.body as string)).toEqual({ subject: 'maths', language: 'en', supportsNumberLine: true });
+    const result = { correct: true, correctIndex: 0, explanation: 'A saved explanation.' };
+    const graded = { ...lesson, completed: 1, answer: { ...result, answerIndex: 0 } };
+    fetchMock.mockResolvedValueOnce(json({ result, lesson: graded }));
+    expect(await client.answerLesson('maths', 'en', lesson.date, 'quiz', 0)).toEqual({ result, lesson: graded });
+    expect(JSON.parse(fetchMock.mock.calls[2][1]!.body as string)).toEqual({
+      subject: 'maths', language: 'en', date: lesson.date, quizId: 'quiz', answerIndex: 0
+    });
+    fetchMock.mockRejectedValueOnce(new Error('Lost response'));
+    await expect(client.answerLesson('maths', 'en', lesson.date, 'quiz', 0)).rejects.toThrow('Cannot reach');
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    fetchMock.mockResolvedValueOnce(json({ ...graded, answer: { ...graded.answer, correctIndex: 1 } }));
+    await expect(client.dailyLesson('maths', 'en')).rejects.toThrow('API contract error');
+    fetchMock.mockResolvedValueOnce(json({ ...lesson, completed: -1 }));
+    await expect(client.dailyLesson('maths', 'en')).rejects.toThrow('API contract error');
+  });
+  it('distinguishes unavailable generation from an unsupported subject without exposing backend diagnostics', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      category: 'model', error: 'PRIVATE diagnostic must not be echoed',
+    }), { status: 503, headers: { 'Content-Type': 'application/json' } }));
+    await expect(api().quiz('space', 'en')).rejects.toThrow('question generator is temporarily unavailable');
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      category: 'PRIVATE unknown category', error: 'PRIVATE diagnostic',
+    }), { status: 503, headers: { 'Content-Type': 'application/json' } }));
+    await expect(api().quiz('space', 'en')).rejects.toThrow('The question service is temporarily unavailable (503). Your previous answers are unchanged.');
+    fetchMock.mockResolvedValueOnce(new Response('PRIVATE diagnostic', { status: 422 }));
+    await expect(api().quiz('currentAffairs', 'en')).rejects.toThrow('not supported for this subject');
+  });
+  it('maps only fixed generation reason codes for regular and daily questions', async () => {
+    const client = api();
+    const failure = (reason: string) => new Response(JSON.stringify({
+      category: 'model', reason, error: 'PRIVATE provider diagnostic',
+    }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    fetchMock.mockResolvedValueOnce(failure('completion-limit'));
+    await expect(client.nextLessonQuestion('space', 'en')).rejects.toThrow('exceeded its response limit');
+    fetchMock.mockResolvedValueOnce(failure('upstream-timeout'));
+    await expect(client.quiz('space', 'en')).rejects.toThrow('took too long');
+    fetchMock.mockResolvedValueOnce(failure('PRIVATE unknown reason'));
+    await expect(client.nextLessonQuestion('space', 'en')).rejects.toThrow('question generator is temporarily unavailable');
+    fetchMock.mockResolvedValueOnce(failure('toString'));
+    await expect(client.quiz('space', 'en')).rejects.toThrow('question generator is temporarily unavailable');
+  });
   it('rejects leaked keys, duplicate library IDs and inconsistent restored answers', async () => {
     const entry = { id: 'fixture', subject: 'Maths', level: 1, goal: 'A fixture goal', question: 'A fixture?' };
     fetchMock.mockResolvedValueOnce(json({ version: 1, questions: [{ ...entry, correctIndex: 0 }] }));

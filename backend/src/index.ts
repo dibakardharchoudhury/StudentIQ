@@ -9,6 +9,7 @@ import { ReminderRepository } from "./reminders.js";
 import { PianoRepository } from "./piano.js";
 import { PreferencesRepository } from "./preferences.js";
 import { QuizRepository } from "./quiz.js";
+import { LessonRepository } from "./lessons.js";
 import { FoundryQuizGenerator } from "./quiz-model.js";
 import { authorizeRequest } from "./auth.js";
 import { SocialAuth } from "./social-auth.js";
@@ -23,6 +24,7 @@ function dependencies(): ApiDependencies {
   const repository = new SessionRepository(blobs);
   const socialDirectory = new SocialDirectory(blobs, config.parentOid);
   const socialAuth = new SocialAuth(blobs, socialDirectory);
+  const quiz = new QuizRepository(blobs);
   sharedDependencies = {
     config,
     socialAuth,
@@ -34,7 +36,8 @@ function dependencies(): ApiDependencies {
     reminders: new ReminderRepository(blobs),
     piano: new PianoRepository(blobs),
     preferences: new PreferencesRepository(blobs, config.preferenceDefaults),
-    quiz: new QuizRepository(blobs),
+    quiz,
+    lessons: new LessonRepository(blobs, quiz),
     quizGenerator: new FoundryQuizGenerator(config),
     quota: new DailyQuotaRepository(blobs, config),
     tutor: new FoundryTutor(config),
@@ -96,6 +99,9 @@ register("access-remove", "access/accounts/{id}", ["DELETE"], operations.removeA
 register("preferences-get", "preferences", ["GET"], operations.getPreferences);
 register("preferences-put", "preferences", ["PUT"], operations.putPreferences);
 register("quiz-post", "quiz", ["POST"], operations.createQuiz);
+register("lesson-get", "lessons/daily", ["GET"], operations.getLesson);
+register("lesson-next", "lessons/daily/next", ["POST"], operations.nextLesson);
+register("lesson-answer", "lessons/daily/answer", ["POST"], operations.answerLesson);
 register("quiz-answer-post", "quiz/{id}/answer", ["POST"], operations.answerQuiz);
 register("quiz-attempts-get", "quiz/attempts", ["GET"], operations.quizAttempts);
 register("library-get", "library", ["GET"], operations.listLibrary);

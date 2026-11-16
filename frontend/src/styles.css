@@ -1,4 +1,36 @@
 * { box-sizing: border-box; }
+.guided-teacher { padding: 24px; }
+.guided-teacher .teacher-bubble { margin: 0 0 20px; max-width: 100%; }
+.teacher-session-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-block: 20px; }
+.guided-teacher > .teacher-session-actions { position: sticky; top: 16px; z-index: 2; background: var(--cp-surface); padding-block: 8px; }
+.guided-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-block: 20px; }
+.guided-choices button { text-align: left; min-height: 56px; }
+.guided-teacher form { display: grid; gap: 12px; }
+.guided-teacher textarea { width: 100%; padding: 12px; background: var(--cp-surface); color: var(--cp-text); border: 1px solid var(--cp-border-strong); border-radius: .625rem; }
+.more-activities { padding: 12px 24px; border-bottom: 1px solid var(--cp-border); }
+.more-activities summary { cursor: pointer; min-height: 44px; align-content: center; color: var(--cp-text-soft); }
+.piano-lesson { border-top: 1px solid var(--cp-border); padding-top: 24px; }
+.piano-lesson label { display: grid; gap: 8px; margin-block: 12px; min-width: 0; }
+.piano-lesson select { min-width: 0; max-width: 100%; }
+.piano-lesson input:not([type="checkbox"]):not([type="range"]) { min-height: 44px; width: 100%; padding: 8px; background: var(--cp-surface); color: var(--cp-text); border: 1px solid var(--cp-border-strong); border-radius: .625rem; }
+.staff-scroll { overflow-x: auto; }
+.piano-lesson-staff { display: block; min-width: 560px; width: 100%; color: var(--cp-text); }
+.piano-lesson-staff text { fill: currentColor; font: 16px "Segoe UI", sans-serif; }
+.piano-lesson-staff .treble-clef { font: 48px "Segoe UI Symbol", serif; }
+.staff-line, .note-stem, .note-flag { stroke: currentColor; stroke-width: 1.5; fill: none; }
+.note-head { fill: currentColor; stroke: currentColor; stroke-width: 2; }
+.note-head.open { fill: var(--cp-surface); }
+.note-highlight { fill: var(--cp-accent-soft); }
+.current-note { color: var(--cp-accent); }
+.current-piano-note strong { font-size: 1.6rem; color: var(--cp-accent); }
+.avatar-feature-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-block: 16px; text-align: left; }
+.avatar-feature-controls fieldset { grid-column: 1 / -1; margin: 0; border: 1px solid var(--cp-border); border-radius: .625rem; min-width: 0; }
+.avatar-feature-controls label { display: grid; gap: 6px; font-size: .875rem; }
+.avatar-feature-controls select { min-width: 0; width: 100%; }
+.avatar-feature-controls .avatar-accessory { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.avatar-swatches { display: flex; gap: 8px; flex-wrap: wrap; padding-block: 8px; }
+.avatar-swatches button { width: 44px; height: 44px; padding: 0; border: 2px solid var(--cp-border-strong); }
+.avatar-swatches button[aria-pressed="true"] { outline: 3px solid var(--cp-accent); outline-offset: 2px; }
 body { margin: 0; background: radial-gradient(ellipse at 0 0, var(--cp-accent-soft), transparent 60%), var(--cp-bg); color: var(--cp-text); font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif; line-height: 1.55; }
 button, select, textarea, input { font: inherit; }
 button, select { min-height: 44px; border: 1px solid var(--cp-border); border-radius: .625rem; background: var(--cp-surface); color: var(--cp-text); padding: 8px 16px; }
@@ -32,10 +64,10 @@ p { margin-bottom: 16px; }
 .welcome-layout { min-height: 670px; display: grid; grid-template-columns: 1.1fr 1fr; align-items: center; gap: clamp(32px, 5vw, 72px); padding: 56px 32px; }
 .welcome-copy h1 { font-size: clamp(2.4rem, 4.5vw, 4rem); max-width: 560px; }
 .welcome-copy > .small { margin-top: 12px; }
-.signin-options { display: grid; gap: 16px; margin-top: 24px; max-width: 520px; }
+.signin-options { display: grid; gap: 16px; margin-top: 24px; max-width: 460px; padding: 24px; background: var(--cp-surface); border: 1px solid var(--cp-border); border-radius: 20px; }
 .signin-options h2, .signin-options h3, .signin-options p { margin: 0; }
 .signin-options h3 { font-size: .875rem; }
-.signin-family { display: grid; gap: 16px; }
+.signin-family { display: grid; gap: 12px; }
 .signin-access-code { padding: 12px 16px; border: 1px solid var(--cp-border); border-radius: .625rem; background: var(--cp-bg-elevated); }
 .signin-access-code summary { cursor: pointer; min-height: 44px; align-content: center; }
 .signin-access-code label { display: grid; gap: 8px; margin-block: 8px; }
@@ -44,10 +76,15 @@ p { margin-bottom: 16px; }
 .signin-feedback .error-banner { margin: 0; border: 2px solid var(--cp-accent); border-left-width: 6px; background: var(--cp-accent-soft); color: var(--cp-text); }
 .signin-feedback .error-banner h3 { font-size: 1.125rem; margin-bottom: 8px; }
 .signin-feedback .error-banner p { font-size: 1rem; line-height: 1.6; }
-.signin-family > button, .signin-unavailable > button { width: 100%; min-height: 48px; padding: 12px 16px; white-space: normal; }
+.signin-family > button, .signin-unavailable > button { width: 100%; max-width: 400px; min-height: 44px; padding: 10px 12px; white-space: normal; }
+.signin-provider { display: grid; grid-template-columns: 20px minmax(0, 1fr) 20px; align-items: center; gap: 8px; background: #fff; color: #1f1f1f; border-color: #747775; font-size: .875rem; font-weight: 500; border-radius: 4px; }
+.signin-provider:hover:not(:disabled) { background: #f2f2f2; border-color: #1f1f1f; }
+.google-signin { width: 100%; max-width: 400px; min-width: 0; min-height: 44px; }
 .signin-unavailable { display: grid; gap: 8px; }
 .signin-unavailable details { font-size: .8125rem; }
-.signin-admin { display: grid; justify-items: start; gap: 10px; padding-top: 20px; border-top: 1px solid var(--cp-border); }
+.signin-admin { padding-top: 16px; border-top: 1px solid var(--cp-border); }
+.signin-admin summary { cursor: pointer; min-height: 44px; align-content: center; font-size: .875rem; color: var(--cp-text-soft); }
+.signin-admin p { margin-block: 12px; }
 .welcome-steps { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 0; }
 .welcome-steps span { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--cp-border); border-radius: .625rem; background: var(--cp-surface); font-size: .8125rem; font-weight: 600; }
 .welcome-steps strong { color: var(--cp-accent); font-size: 1.1rem; }
@@ -102,11 +139,13 @@ p { margin-bottom: 16px; }
 .grownup-nav button[aria-pressed="true"] { border-color: var(--cp-accent); background: var(--cp-accent-soft); color: var(--cp-accent); }
 .learning-layout { display: grid; grid-template-columns: minmax(270px, .75fr) minmax(0, 1.6fr); align-items: start; gap: 24px; }
 .teacher-panel, .lesson-panel, .records-panel { border: 1px solid var(--cp-border); border-radius: 16px; background: var(--cp-surface); overflow: hidden; }
-.teacher-panel { text-align: center; padding: 24px; background: var(--cp-surface); }
+.lesson-panel { overflow: clip; min-width: 0; }
+.teacher-panel { text-align: center; padding: 24px; background: var(--cp-surface); position: sticky; top: 16px; max-height: calc(100dvh - 32px); overflow-y: auto; scrollbar-gutter: stable; }
+.teacher-presence { position: sticky; top: -1px; z-index: 2; background: var(--cp-surface); }
 .panel-heading { display: flex; justify-content: space-between; align-items: center; text-align: left; gap: 12px; }
 .panel-heading .eyebrow { margin: 0; }
 .live-dot { color: var(--cp-text-soft); font-size: .6875rem; }
-.teacher-panel .teacher-stage { height: 310px; }
+.teacher-panel .teacher-stage { height: min(310px, 38dvh); }
 .teacher-note { margin: 20px 0; }
 .talk-shortcut { display: block; width: 100%; padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--cp-accent); border-radius: .625rem; background: var(--cp-accent-soft); color: var(--cp-accent); font-weight: 650; }
 .talk-shortcut:hover { background: var(--cp-highlight); }
@@ -412,7 +451,7 @@ footer > .small { flex-basis: 100%; font-size: .6875rem; }
   .welcome-layout { padding: 40px 0; gap: 32px; }
   .learning-layout { grid-template-columns: 270px minmax(0, 1fr); gap: 16px; }
   .teacher-panel { padding: 16px; }
-  .teacher-panel .teacher-stage { height: 240px; }
+  .teacher-panel .teacher-stage { height: min(240px, 32dvh); }
   .parent-status { display: none; }
   .panel-heading { display: block; }
 }
@@ -435,7 +474,9 @@ footer > .small { flex-basis: 100%; font-size: .6875rem; }
   .adventure-banner p:not(.eyebrow) { margin-bottom: 0; }
   .adventure-steps { display: none; }
   .learning-layout { grid-template-columns: 1fr; }
-  .teacher-panel { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 8px 16px; align-items: center; }
+  .guided-teacher > .teacher-session-actions { top: calc(34dvh + 16px); }
+  .teacher-panel { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 8px 16px; align-items: center; top: 8px; z-index: 3; max-height: 34dvh; }
+  .teacher-presence { grid-row: 1 / 4; }
   .teacher-panel .panel-heading, .teacher-panel .teacher-note, .teacher-panel .privacy-strip, .teacher-panel .voice-toggle + p { display: none; }
   .teacher-panel .teacher-stage { height: 132px; grid-row: 1 / 4; }
   .teacher-panel .teacher-caption { display: none; }

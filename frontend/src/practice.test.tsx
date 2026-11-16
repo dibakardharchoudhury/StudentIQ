@@ -48,6 +48,31 @@ describe('optional piano practice', () => {
 });
 
 describe('low-pressure backend quiz', () => {
+  it('keeps the saved grade after the next question fails and retries generation without submitting the answer again', async () => {
+    const api = {
+      quiz: vi.fn().mockResolvedValueOnce({ id: 'one', question: 'First question?', options: ['A', 'B', 'C', 'D'] })
+        .mockRejectedValueOnce(new Error('Tutoring service error (503).'))
+        .mockResolvedValueOnce({ id: 'two', question: 'Second question?', options: ['A', 'B', 'C', 'D'] }),
+      answerQuiz: vi.fn().mockResolvedValue({ correct: true, correctIndex: 0, explanation: 'Saved correct answer.' }),
+      quizAttempts: vi.fn().mockResolvedValue([{ id: 'one', correct: true }]),
+    };
+    render(<Quiz api={api as unknown as Api} subject="space" language="en" online disabled={false} onBusyChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Make me a mission/ }));
+    await screen.findByText('First question?');
+    fireEvent.click(screen.getByRole('radio', { name: 'A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Check my choice' }));
+    await screen.findByText('Saved correct answer.');
+    const next = screen.getByRole('button', { name: /Make another mission/ });
+    await waitFor(() => expect(next).toBeEnabled());
+    fireEvent.click(next);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Your earlier answers and results are unchanged');
+    expect(screen.getByText('Saved correct answer.')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).not.toHaveTextContent('unsupported');
+    fireEvent.click(next);
+    await screen.findByText('Second question?');
+    expect(api.answerQuiz).toHaveBeenCalledOnce();
+    expect(api.quiz).toHaveBeenCalledTimes(3);
+  });
   it('lets a learner stop waiting for a save and reconciles the stored answer without another submission', async () => {
     const api = {
       quiz: vi.fn().mockResolvedValue({ id: 'quiz', question: 'A fixture?', options: ['A', 'B', 'C', 'D'] }),

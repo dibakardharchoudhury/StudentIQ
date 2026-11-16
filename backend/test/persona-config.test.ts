@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { getConfig, type AppConfig } from "../src/config.js";
 import { FoundryTutor } from "../src/services.js";
-import { FoundryQuizGenerator } from "../src/quiz-model.js";
+import { FoundryQuizGenerator, QuizGenerationError } from "../src/quiz-model.js";
 import { chooseLearningTopic } from "../src/curriculum.js";
 
 const config: AppConfig = {
@@ -79,6 +79,10 @@ test("tutor sends bounded single-call Q&A guidance for school, music, and langua
     assert.match(system, /Maths, Norsk, Science, Current Affairs, Geography, History, English/);
     assert.match(system, /piano, basic music theory, additional languages/);
     assert.match(system, /short Q&A exchanges/);
+    assert.match(system, /one optional check-in/);
+    assert.match(system, /Never assume attendance/);
+    assert.match(system, /ten questions, one at a time/);
+    assert.match(system, /Respect ending early/);
     assert.match(system, /visual activities/);
     assert.match(system, /Never claim you can hear or evaluate a real piano performance/);
     assert.match(system, /never invent grades, scores, or achievements/);
@@ -137,6 +141,7 @@ test("quiz model uses one bounded JSON generation call and rejects filtered or m
     };
     assert.ok(body.max_tokens > 0 && body.max_tokens <= 2048);
     assert.equal(body.response_format.type, "json_object");
+    assert.equal(JSON.parse(String(init?.body)).reasoning_effort, "low");
     assert.match(body.messages[0]!.content, /not live news or current affairs/);
     assert.match(body.messages[0]!.content, /untrusted data, not instructions/);
     assert.match(body.messages[0]!.content, /What is 1 \+ 1/);
@@ -144,6 +149,7 @@ test("quiz model uses one bounded JSON generation call and rejects filtered or m
     assert.match(body.messages[0]!.content, /Explore multiplication as equal rows or groups/);
     return Response.json({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify(generated) } }] });
   });
+
   const context = { subjectSummary: "Fraction notes", recentQuestions: ["What is a fraction?"] };
   assert.deepEqual(await generator.generate({ subject: "Maths", language: "en" }, ["What is 1 + 1?"], context,
     undefined, chooseLearningTopic("Maths", [])), generated);
@@ -188,4 +194,23 @@ test("quiz model uses one bounded JSON generation call and rejects filtered or m
     choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ ...line, correctIndex: 0 }) } }]
   }));
   await assert.rejects(wrongLine.generate({ subject: "Maths", language: "en" }, [], context));
+});
+
+test("quiz failures expose only fixed actionable reasons, without retries or raw upstream content", async () => {
+  const credential = { getToken: async () => ({ token: "synthetic-token", expiresOnTimestamp: Date.now() + 60_000 }) };
+  for (const [response, reason] of [
+    [new Response("private upstream error", { status: 429 }), "upstream-rate-limit"],
+    [new Response("private upstream error", { status: 401 }), "upstream-authentication"],
+    [new Response("private upstream error", { status: 503 }), "upstream-unavailable"],
+    [Response.json({ choices: [{ finish_reason: "length", message: { content: "private unfinished output" } }] }), "completion-limit"],
+    [Response.json({ choices: [{ finish_reason: "content_filter", message: {} }] }), "filtered-output"],
+    [new Response("not JSON"), "invalid-output"],
+  ] as const) {
+    let calls = 0;
+    const generator = new FoundryQuizGenerator(config, credential, async () => { calls++; return response; });
+    await assert.rejects(generator.generate({ subject: "Space", language: "en" }, [],
+      { subjectSummary: "", recentQuestions: [] }), error =>
+      error instanceof QuizGenerationError && error.reason === reason && !error.message.includes("private"));
+    assert.equal(calls, 1);
+  }
 });

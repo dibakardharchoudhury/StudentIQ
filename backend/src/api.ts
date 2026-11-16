@@ -29,6 +29,8 @@ import {
 } from "./reminders.js";
 import { PianoRepository, validatePianoInput } from "./piano.js";
 import { PreferencesRepository } from "./preferences.js";
+import { LessonRepository } from "./lessons.js";
+import { QuizGenerationError, type QuizFailureReason } from "./quiz-model.js";
 import { ApprovalRequiredError, type SocialAuth } from "./social-auth.js";
 import { AccessRequestError, InvitationCodeError, type SocialDirectory } from "./social-directory.js";
 import { chooseLearningTopic } from "./curriculum.js";
@@ -46,6 +48,7 @@ export interface ApiDependencies {
   piano: PianoRepository;
   preferences: PreferencesRepository;
   quiz: QuizRepository;
+  lessons: LessonRepository;
   quizGenerator: QuizGenerator;
   tutor: Tutor;
   speech: SpeechTokenProvider;
@@ -123,7 +126,7 @@ async function readJson(request: HttpRequest): Promise<unknown> {
 class PayloadTooLargeError extends Error {}
 
 class OperationFailure extends Error {
-  constructor(readonly category: ErrorCategory) {
+  constructor(readonly category: ErrorCategory, readonly reason?: QuizFailureReason) {
     super("The operation did not complete.");
   }
 }
@@ -223,7 +226,8 @@ export async function dispatch(
         ? "quota-unavailable"
         : error instanceof OperationFailure ? error.category : "unexpected";
       logUnexpectedFailure(dependencies.logError, options.operationName ?? "api", category);
-      response = json(503, { error: "The request could not be completed. Please try again." });
+      response = json(503, { error: "The request could not be completed. Please try again.", category,
+        ...(error instanceof OperationFailure && error.reason ? { reason: error.reason } : {}) });
     }
     return { ...response, headers: { ...headers, ...(response.headers ?? {}) } };
   }
@@ -284,8 +288,7 @@ export function createOperations() {
     }
   };
 
-  const createQuiz: Operation = async (request, _principalOid, { config, quiz, quizGenerator, quota, repository }) => {
-    const body = await readJson(request) as Record<string, unknown>;
+  const generateQuiz = async (body: Record<string, unknown>, { config, quiz, quizGenerator, quota, repository }: ApiDependencies) => {
     const { supportsNumberLine, ...quizInput } = body;
     if (supportsNumberLine !== undefined && typeof supportsNumberLine !== "boolean") throw new InputValidationError();
     const input = validateQuizInput(quizInput);
@@ -304,12 +307,15 @@ export function createOperations() {
       const generated = await quizGenerator.generate(input, recent.questions, context, target, topic);
       if (generated.visual?.kind === "numberLine" && supportsNumberLine !== true) throw new Error("Unsupported client visual.");
       category = "persistence";
-      return json(200, await quiz.create(config.parentOid, input, generated, topic));
+      return await quiz.create(config.parentOid, input, generated, topic);
     } catch (error) {
       if (error instanceof QuotaExceededError || error instanceof QuizDuplicateError) throw error;
-      throw new OperationFailure(category);
+      throw new OperationFailure(category, category === "model" && error instanceof QuizGenerationError ? error.reason : undefined);
     }
   };
+
+  const createQuiz: Operation = async (request, _principalOid, dependencies) =>
+    json(200, await generateQuiz(await readJson(request) as Record<string, unknown>, dependencies));
 
   const answerQuiz: Operation = async (request, _principalOid, { config, quiz }) => {
     const answerIndex = validateQuizAnswer(await readJson(request));
@@ -318,6 +324,47 @@ export function createOperations() {
     } catch (error) {
       if (error instanceof InputValidationError || error instanceof QuizNotFoundError ||
           error instanceof QuizAnswerConflictError) throw error;
+      throw new OperationFailure("persistence");
+    }
+  };
+
+  const getLesson: Operation = async (request, _principalOid, { config, lessons }) => {
+    const query = new URL(request.url).searchParams;
+    if ([...query.keys()].some(key => !["subject", "language"].includes(key)) ||
+        query.getAll("subject").length !== 1 || query.getAll("language").length !== 1) throw new InputValidationError();
+    const selection = query.get("subject") === "otherLanguages";
+    const input = validateQuizInput({ subject: selection ? "Spanish" : query.get("subject"), language: query.get("language") });
+    try {
+      return json(200, await lessons.get(config.parentOid, selection
+        ? await lessons.selectedLanguage(config.parentOid, input.language) : input));
+    } catch { throw new OperationFailure("persistence"); }
+  };
+
+  const nextLesson: Operation = async (request, _principalOid, dependencies) => {
+    const body = await readJson(request) as Record<string, unknown>;
+    const { supportsNumberLine, ...rawInput } = body;
+    if (supportsNumberLine !== undefined && typeof supportsNumberLine !== "boolean") throw new InputValidationError();
+    const input = validateQuizInput(rawInput);
+    try {
+      const lesson = await dependencies.lessons.next(dependencies.config.parentOid, input,
+        () => generateQuiz(body, dependencies));
+      return json(200, lesson);
+    } catch (error) {
+      if (error instanceof OperationFailure || error instanceof QuotaExceededError || error instanceof QuizDuplicateError) throw error;
+      throw new OperationFailure("persistence");
+    }
+  };
+
+  const answerLesson: Operation = async (request, _principalOid, { config, lessons }) => {
+    const body = await readJson(request) as Record<string, unknown>;
+    const { date, quizId, answerIndex, ...rawInput } = body;
+    const input = validateQuizInput(rawInput);
+    validateQuizAnswer({ answerIndex });
+    if (typeof date !== "string" || typeof quizId !== "string") throw new InputValidationError();
+    try { return json(200, await lessons.answer(config.parentOid, input, date, quizId, answerIndex as number)); }
+    catch (error) {
+      if (error instanceof InputValidationError || error instanceof PersistenceConflictError ||
+          error instanceof QuizAnswerConflictError || error instanceof QuizNotFoundError) throw error;
       throw new OperationFailure("persistence");
     }
   };
@@ -510,7 +557,7 @@ export function createOperations() {
 
   return {
     health, me, socialSession, socialLogout, listAccounts, saveAccount, removeAccount,
-    getPreferences, putPreferences, createQuiz, answerQuiz, quizAttempts,
+    getPreferences, putPreferences, createQuiz, answerQuiz, quizAttempts, getLesson, nextLesson, answerLesson,
     listLibrary, createLibraryQuiz, quizState, quizHint,
     listReminders, saveReminder, deleteReminder,
     recordPiano, listPiano, listSessions, getSession, chat, speechToken

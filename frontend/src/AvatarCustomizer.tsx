@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import type { Language } from './api';
-import { applyAvatarPrompt, AvatarPromptError, defaultAvatar, type AvatarStyle } from './avatar-style';
+import { applyAvatarPrompt, AvatarPromptError, avatarColors, skinTones, defaultAvatar, type AvatarStyle, type AvatarColor } from './avatar-style';
 
 export default function AvatarCustomizer({ value, onChange, language, disabled = false }: {
   value: AvatarStyle; onChange(value: AvatarStyle): void; language: Language; disabled?: boolean;
@@ -18,6 +18,12 @@ export default function AvatarCustomizer({ value, onChange, language, disabled =
     unsupported: 'Det kan jeg ikke tegne ennå. Bruk hår- eller klesfarger, kort/langt hår, briller, sløyfe eller stjernemerke. Ingen endringer ble gjort.',
     conflicting: 'Velg bare én verdi for hver egenskap, for eksempel én hårfarge. Ingen endringer ble gjort.',
     changed: 'Avatarens stil er oppdatert i denne fanen.', restored: 'Standardavataren er tilbake.',
+    skin: 'Hudtone', hair: 'Hårfarge', style: 'Frisyre', shirt: 'Klesfarge', eyes: 'Øyenfarge',
+    face: 'Ansiktsform', oval: 'Oval', round: 'Rund', theme: 'Følg temaet',
+    short: 'Kort', long: 'Langt', curly: 'Krøller', ponytail: 'Hestehale', none: 'Uten hår',
+    glasses: 'Briller', bow: 'Sløyfe', badge: 'Stjernemerke',
+    choose: 'Velg egenskapene du liker. Det finnes ikke ett bestemt utseende for en nasjonalitet eller bakgrunn.',
+    shade: 'Tone',
   } : {
     title: 'Design your learning companion', label: 'How should your teacher look?',
     hint: 'Try “purple hair, blue shirt and a bow”. Supports colours, short/long hair, glasses, a bow and a star badge. Use “without” to remove accessories.',
@@ -26,12 +32,50 @@ export default function AvatarCustomizer({ value, onChange, language, disabled =
     unsupported: 'I cannot draw that yet. Use hair or shirt colours, short/long hair, glasses, a bow or a star badge. Nothing was changed.',
     conflicting: 'Choose one value for each feature, such as one hair colour. Nothing was changed.',
     changed: 'Avatar style updated in this tab.', restored: 'Default avatar restored.',
+    skin: 'Skin tone', hair: 'Hair colour', style: 'Hairstyle', shirt: 'Clothing colour', eyes: 'Eye colour',
+    face: 'Face shape', oval: 'Oval', round: 'Round', theme: 'Match the theme',
+    short: 'Short', long: 'Long', curly: 'Curly', ponytail: 'Ponytail', none: 'No hair',
+    glasses: 'Glasses', bow: 'Hair bow', badge: 'Star badge',
+    choose: 'Choose the features you like. There is no single look for a nationality or background.',
+    shade: 'Shade',
   };
+  const colorNames: Record<AvatarColor, string> = language === 'nb'
+    ? { brown: 'Brun', black: 'Svart', blonde: 'Blond', white: 'Hvit', red: 'Rød', orange: 'Oransje', yellow: 'Gul', green: 'Grønn', blue: 'Blå', purple: 'Lilla', pink: 'Rosa', teal: 'Turkis' }
+    : { brown: 'Brown', black: 'Black', blonde: 'Blonde', white: 'White', red: 'Red', orange: 'Orange', yellow: 'Yellow', green: 'Green', blue: 'Blue', purple: 'Purple', pink: 'Pink', teal: 'Teal' };
+  function update<K extends keyof AvatarStyle>(key: K, next: AvatarStyle[K]) {
+    onChange({ ...value, [key]: next }); setError(''); setStatus(c.changed);
+  }
   return <section className="avatar-customizer">
     <button type="button" className="avatar-customizer__toggle" aria-expanded={open} aria-controls={`${hint}-panel`}
       onClick={() => setOpen(value => !value)}>{c.title}</button>
     <div id={`${hint}-panel`} hidden={!open}>
       {open && <>
+      <p className="small">{c.choose}</p>
+      <div className="avatar-feature-controls">
+        <fieldset disabled={disabled}><legend>{c.skin}</legend>
+          <div className="avatar-swatches">{Object.entries(skinTones).map(([tone, color], index) =>
+            <button type="button" key={tone} aria-label={`${c.skin}: ${c.shade} ${index + 1}`}
+              aria-pressed={value.skin === tone} style={{ backgroundColor: color }}
+              onClick={() => update('skin', tone as AvatarStyle['skin'])}>
+              <span className="sr-only">{value.skin === tone ? '✓' : ''}</span>
+            </button>)}</div>
+        </fieldset>
+        <label>{c.style}<select value={value.hairLength} disabled={disabled}
+          onChange={event => update('hairLength', event.target.value as AvatarStyle['hairLength'])}>
+          {(['short', 'long', 'curly', 'ponytail', 'none'] as const).map(style => <option key={style} value={style}>{c[style]}</option>)}
+        </select></label>
+        {(['hair', 'eyes', 'shirt'] as const).map(feature => <label key={feature}>{c[feature]}
+          <select value={value[feature]} disabled={disabled} onChange={event => update(feature, event.target.value as AvatarStyle[typeof feature])}>
+            {feature === 'shirt' && <option value="theme">{c.theme}</option>}
+            {(Object.keys(avatarColors) as AvatarColor[]).map(color => <option value={color} key={color}>{colorNames[color]}</option>)}
+          </select></label>)}
+        <label>{c.face}<select value={value.face} disabled={disabled} onChange={event => update('face', event.target.value as AvatarStyle['face'])}>
+          <option value="oval">{c.oval}</option><option value="round">{c.round}</option>
+        </select></label>
+        {(['glasses', 'bow', 'badge'] as const).map(feature => <label key={feature} className="avatar-accessory">
+          <input type="checkbox" checked={value[feature]} disabled={disabled}
+            onChange={event => update(feature, event.target.checked)} />{c[feature]}</label>)}
+      </div>
       <form onSubmit={event => {
         event.preventDefault();
         if (disabled) return;

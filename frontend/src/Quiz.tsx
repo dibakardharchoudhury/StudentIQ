@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Api, Language, LibraryEntry, QuizAnswer, QuizAttempt, QuizQuestion } from './api';
 import { copy } from './i18n';
 
-function MissionVisual({ visual, label, filledLabel, partsLabel, lineLabel, fromLabel, toLabel }: {
+export function MissionVisual({ visual, label, filledLabel, partsLabel, lineLabel, fromLabel, toLabel }: {
   visual: NonNullable<QuizQuestion['visual']>; label: string; filledLabel: string; partsLabel: string;
   lineLabel: string; fromLabel: string; toLabel: string;
 }) {

@@ -4,6 +4,15 @@ import { findFiltered, foundryChatUrl, readBoundedBody } from "./services.js";
 import { validateGeneratedQuiz, type GeneratedQuiz, type QuizGenerator, type QuizInput, type QuizVisual } from "./quiz.js";
 import type { LearningTopic } from "./curriculum.js";
 
+export type QuizFailureReason = "upstream-unavailable" | "upstream-rate-limit" | "upstream-authentication" |
+  "upstream-timeout" | "invalid-output" | "completion-limit" | "filtered-output";
+
+export class QuizGenerationError extends Error {
+  constructor(readonly reason: QuizFailureReason) {
+    super("Quiz generation did not complete.");
+  }
+}
+
 function validateMathVisual(quiz: GeneratedQuiz): void {
   const visual = quiz.visual;
   if (visual?.kind === "array") {
@@ -43,15 +52,19 @@ export class FoundryQuizGenerator implements QuizGenerator {
   ) {}
 
   async generate(input: QuizInput, recentQuestions: string[], context: { subjectSummary: string; recentQuestions: string[] }, targetVisual?: QuizVisual, topic?: LearningTopic): Promise<GeneratedQuiz> {
-    const token = await this.credential.getToken("https://cognitiveservices.azure.com/.default");
-    if (!token?.token) throw new Error("Quiz model authentication failed.");
+    const token = await this.credential.getToken("https://cognitiveservices.azure.com/.default")
+      .catch(() => { throw new QuizGenerationError("upstream-authentication"); });
+    if (!token?.token) throw new QuizGenerationError("upstream-authentication");
     const url = foundryChatUrl(this.config);
-    const response = await this.request(url, {
+    const signal = AbortSignal.timeout(25000);
+    let response: Response;
+    try { response = await this.request(url, {
       method: "POST",
       headers: { Authorization: `Bearer ${token.token}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: this.config.foundryModel,
         max_tokens: 2048,
+        ...(this.config.foundryModel === "model-router" ? { reasoning_effort: "low" } : {}),
         temperature: 0.4,
         response_format: { type: "json_object" },
         messages: [
@@ -89,23 +102,33 @@ export class FoundryQuizGenerator implements QuizGenerator {
           { role: "user", content: "Create one new age-appropriate practice question." }
         ]
       }),
-      signal: AbortSignal.timeout(25000)
-    });
-    if (!response.ok) throw new Error("Quiz model request failed.");
-    const body: unknown = JSON.parse(await readBoundedBody(response, 64 * 1024));
-    if (!body || typeof body !== "object" || findFiltered(body)) throw new Error("Quiz model response was rejected.");
+      signal
+    }); } catch {
+      throw new QuizGenerationError(signal.aborted ? "upstream-timeout" : "upstream-unavailable");
+    }
+    if (!response.ok) throw new QuizGenerationError(response.status === 429 ? "upstream-rate-limit"
+      : response.status === 401 || response.status === 403 ? "upstream-authentication" : "upstream-unavailable");
+    let body: unknown;
+    try { body = JSON.parse(await readBoundedBody(response, 64 * 1024)); }
+    catch { throw new QuizGenerationError(signal.aborted ? "upstream-timeout" : "invalid-output"); }
+    if (!body || typeof body !== "object") throw new QuizGenerationError("invalid-output");
+    if (findFiltered(body)) throw new QuizGenerationError("filtered-output");
     const choice = (body as {
       choices?: { finish_reason?: unknown; message?: { content?: unknown; refusal?: unknown } }[];
     }).choices?.[0];
-    if (choice?.finish_reason !== "stop" || choice.message?.refusal ||
-        typeof choice?.message?.content !== "string") throw new Error("Quiz model response was rejected.");
-    const quiz = validateGeneratedQuiz(JSON.parse(choice.message.content));
-    if (!quiz.visual || !quiz.lesson) throw new Error("Quiz model did not provide a visual lesson.");
-    if (input.subject === "Maths") validateMathVisual(quiz);
-    else if (quiz.visual.kind !== "cards") throw new Error("Non-maths question requires cards.");
-    if (targetVisual && JSON.stringify(quiz.visual) !== JSON.stringify(targetVisual)) {
-      throw new Error("Quiz visual did not match the requested challenge.");
+    if (choice?.finish_reason === "content_filter" || choice?.message?.refusal) throw new QuizGenerationError("filtered-output");
+    if (choice?.finish_reason === "length") throw new QuizGenerationError("completion-limit");
+    if (choice?.finish_reason !== "stop" ||
+        typeof choice?.message?.content !== "string") throw new QuizGenerationError("invalid-output");
+    try {
+      const quiz = validateGeneratedQuiz(JSON.parse(choice.message.content));
+      if (!quiz.visual || !quiz.lesson) throw new Error("Missing lesson.");
+      if (input.subject === "Maths") validateMathVisual(quiz);
+      else if (quiz.visual.kind !== "cards") throw new Error("Non-maths question requires cards.");
+      if (targetVisual && JSON.stringify(quiz.visual) !== JSON.stringify(targetVisual)) throw new Error("Mismatched visual.");
+      return quiz;
+    } catch {
+      throw new QuizGenerationError("invalid-output");
     }
-    return quiz;
   }
 }

@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App, { Workspace } from './App';
 import { Api, type Session } from './api';
 import { ParentAuth } from './auth';
@@ -39,7 +39,7 @@ it('places approval feedback beside sign-in controls and brings it into focus', 
   try {
     render(<App />);
     const signin = screen.getByRole('region', { name: 'Choose how to sign in' });
-    fireEvent.click(await within(signin).findByRole('button', { name: 'Sign in with Microsoft personal account' }));
+    fireEvent.click(await within(signin).findByRole('button', { name: 'Continue with Microsoft' }));
     const alert = await within(signin).findByRole('alert');
     expect(alert).toHaveTextContent('Before you sign in again');
     expect(alert).toHaveTextContent('People & access');
@@ -69,21 +69,39 @@ vi.mock('./speech', () => ({
 const fixture: Session = {
   id: 'fixture-session', subject: 'maths', language: 'en', summary: 'Backend fixture summary', updatedAt: '2026-11-13T10:00:00Z',
 };
+const emptyLesson = { date: '2026-11-16', timeZone: 'UTC' as const, subject: 'Maths', language: 'en' as const,
+  completed: 0, target: 10 as const, current: null, answer: null };
+const dailyLesson = () => Promise.resolve(emptyLesson);
+beforeEach(() => { vi.spyOn(Api.prototype, 'dailyLesson').mockImplementation(dailyLesson); });
 async function setup(chat: ReturnType<typeof vi.fn>) {
   const api = {
+    dailyLesson,
     chat, sessions: vi.fn().mockResolvedValue([fixture]), session: vi.fn(),
     preferences: vi.fn().mockResolvedValue({ appearance: 'rose', voice: 'default', mood: 'gentle' }),
     pianoAttempts: vi.fn().mockResolvedValue([]), quizAttempts: vi.fn().mockResolvedValue([]),
   };
   render(<Workspace api={api as unknown as Api} initialSessions={[]} language="en" setLanguage={vi.fn()} online />);
-  await waitFor(() => expect(screen.getByRole('button', { name: /New session/ })).toBeEnabled(), { timeout: 5000 });
-  fireEvent.click(screen.getByRole('button', { name: 'Talk to teacher' }));
+  await waitFor(() => expect(screen.getByText(/New session/, { selector: 'button' })).toBeEnabled());
+  const moreActivities = screen.getByText('More activities', { selector: 'summary' });
+  fireEvent.click(moreActivities);
+  fireEvent.click(within(moreActivities.parentElement!).getByRole('button', { name: 'Talk to teacher' }));
   return api;
 }
 
 describe('learning state', () => {
+  it('starts with one teacher-led experience and keeps optional modes out of the main navigation', async () => {
+    const api = { dailyLesson, preferences: vi.fn().mockResolvedValue({ appearance: 'rose', voice: 'default', mood: 'gentle' }) };
+    render(<Workspace api={api as unknown as Api} initialSessions={[]} language="en" setLanguage={vi.fn()} online />);
+    expect(screen.getByText(/How has your day been/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start lesson (10 questions)' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Mission' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Talk to teacher' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Question library' })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: /New session/ })).toBeEnabled());
+  });
   it('shows only one activity at a time and keeps a mission choice and chat draft when switching', async () => {
     const api = {
+      dailyLesson,
       preferences: vi.fn().mockResolvedValue({ appearance: 'rose', voice: 'default', mood: 'gentle' }),
       quiz: vi.fn().mockResolvedValue({ id: 'm1', question: 'Count the stars?', options: ['1', '2', '3', '4'] }),
       library: vi.fn().mockResolvedValue([{ id: 'maths-fixture', subject: 'Maths', level: 1, goal: 'A library goal', question: 'A library preview?' }]),
@@ -91,31 +109,47 @@ describe('learning state', () => {
         question: 'A library question?', options: ['One', 'Two', 'Three', 'Four'] }),
     };
     render(<Workspace api={api as unknown as Api} initialSessions={[]} language="en" setLanguage={vi.fn()} online />);
-    const start = screen.getByRole('button', { name: /Make me a mission/ });
+    const moreActivities = screen.getByText('More activities', { selector: 'summary' });
+    const modes = within(moreActivities.parentElement!);
+    fireEvent.click(moreActivities);
+    const mission = modes.getByRole('button', { name: 'Mission' });
+    await waitFor(() => expect(mission).toBeEnabled());
+    fireEvent.click(mission);
+    const start = screen.getByText(/Make me a mission/, { selector: 'button' });
+    const missionPanel = start.closest('section')!;
+    const missionQueries = within(missionPanel);
+    const draft = screen.getByLabelText('What are you curious about?');
+    const composer = within(draft.closest('form')!);
     await waitFor(() => expect(start).toBeEnabled());
     fireEvent.click(start);
-    await screen.findByText('Count the stars?');
-    fireEvent.click(screen.getByRole('radio', { name: '2' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Talk to teacher' }));
-    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'I wonder why' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Mission' }));
-    expect(screen.getByRole('radio', { name: '2' })).toBeChecked();
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Talk to teacher' }));
-    expect(screen.getByRole('textbox')).toHaveValue('I wonder why');
-    fireEvent.click(screen.getByRole('button', { name: 'Question library' }));
-    fireEvent.click(await screen.findByRole('button', { name: /Open question:/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Start this question/ }));
-    await screen.findByText('A library question?');
-    fireEvent.click(screen.getByRole('radio', { name: 'Three' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Mission' })).toBeEnabled());
-    fireEvent.click(screen.getByRole('button', { name: 'Mission' }));
-    expect(screen.getByRole('radio', { name: '2' })).toBeChecked();
-    fireEvent.click(screen.getByRole('button', { name: 'Question library' }));
-    expect(screen.getByRole('radio', { name: 'Three' })).toBeChecked();
-    fireEvent.click(screen.getByRole('button', { name: 'Talk to teacher' }));
-    expect(screen.getByRole('textbox')).toHaveValue('I wonder why');
+    await missionQueries.findByText('Count the stars?');
+    fireEvent.click(missionQueries.getByRole('radio', { name: '2' }));
+    fireEvent.click(modes.getByRole('button', { name: 'Talk to teacher' }));
+    expect(missionQueries.queryByRole('radio')).not.toBeInTheDocument();
+    expect(missionPanel).not.toBeVisible();
+    fireEvent.change(composer.getByRole('textbox'), { target: { value: 'I wonder why' } });
+    fireEvent.click(mission);
+    expect(missionQueries.getByRole('radio', { name: '2' })).toBeChecked();
+    expect(composer.queryByRole('textbox')).not.toBeInTheDocument();
+    fireEvent.click(modes.getByRole('button', { name: 'Talk to teacher' }));
+    expect(composer.getByRole('textbox')).toHaveValue('I wonder why');
+    fireEvent.click(modes.getByRole('button', { name: 'Question library' }));
+    const preview = await screen.findByText('A library preview?');
+    const libraryPanel = preview.closest('section')!;
+    const library = within(libraryPanel);
+    fireEvent.click(library.getByRole('button', { name: /Open question:/ }));
+    fireEvent.click(library.getByRole('button', { name: /Start this question/ }));
+    await library.findByText('A library question?');
+    fireEvent.click(library.getByRole('radio', { name: 'Three' }));
+    await waitFor(() => expect(mission).toBeEnabled());
+    fireEvent.click(mission);
+    expect(missionQueries.getByRole('radio', { name: '2' })).toBeChecked();
+    expect(libraryPanel).not.toBeVisible();
+    fireEvent.click(modes.getByRole('button', { name: 'Question library' }));
+    expect(library.getByRole('radio', { name: 'Three' })).toBeChecked();
+    expect(missionPanel).not.toBeVisible();
+    fireEvent.click(modes.getByRole('button', { name: 'Talk to teacher' }));
+    expect(composer.getByRole('textbox')).toHaveValue('I wonder why');
     expect(api.quiz).toHaveBeenCalledOnce();
     expect(api.libraryQuiz).toHaveBeenCalledOnce();
   });
@@ -123,22 +157,24 @@ describe('learning state', () => {
     speechState.listen.mockReset(); speechState.stop.mockReset();
     const chat = vi.fn();
     await setup(chat);
-    fireEvent.click(screen.getByRole('button', { name: 'Speak to teacher' }));
+    const input = screen.getByLabelText('What are you curious about?');
+    const composer = within(input.closest('form')!);
+    fireEvent.click(composer.getByRole('button', { name: 'Speak to teacher' }));
     expect(speechState.listen).toHaveBeenCalledWith('en');
-    const stop = screen.getByRole('button', { name: 'Stop listening' });
+    const stop = composer.getByRole('button', { name: 'Stop listening' });
     expect(stop).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: /Send question/ })).toBeDisabled();
+    expect(composer.getByRole('button', { name: /Send question/ })).toBeDisabled();
     fireEvent.click(stop);
     expect(speechState.stop).toHaveBeenCalledOnce();
-    expect(screen.getByRole('textbox')).toHaveValue('A spoken question');
+    expect(composer.getByRole('textbox')).toHaveValue('A spoken question');
     expect(chat).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Speak to teacher' })).toHaveAttribute('aria-pressed', 'false');
+    expect(composer.getByRole('button', { name: 'Speak to teacher' })).toHaveAttribute('aria-pressed', 'false');
   });
   it('gives learners a clear sequence and changes the selected learning world without sending a question', async () => {
     const chat = vi.fn();
     await setup(chat);
     expect(screen.getByRole('heading', { name: 'What shall we discover today?' })).toBeInTheDocument();
-    expect(screen.getByRole('list', { name: 'How to explore' })).toHaveTextContent('Pick a world');
+    expect(screen.getByRole('list', { name: 'How to explore' })).toHaveTextContent('Say hello');
     fireEvent.click(screen.getByText('Choose a different subject'));
     fireEvent.click(screen.getByRole('button', { name: 'Science' }));
     expect(screen.getByRole('heading', { name: 'Science' })).toBeInTheDocument();
@@ -146,6 +182,7 @@ describe('learning state', () => {
   });
   it('keeps family access and calendar in separate admin sections', async () => {
     const api = {
+      dailyLesson,
       preferences: vi.fn().mockResolvedValue({ appearance: 'rose', voice: 'default', mood: 'gentle' }),
       accessDirectory: vi.fn().mockResolvedValue({ accounts: [], requests: [] }), reminders: vi.fn().mockResolvedValue([]),
     };

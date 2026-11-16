@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import AvatarCustomizer from './AvatarCustomizer';
 import { applyAvatarPrompt, defaultAvatar } from './avatar-style';
+import { useState } from 'react';
 
 it('applies combined English and Norwegian prompts without changing unrelated features', () => {
   const blue = applyAvatarPrompt('Please give my teacher short blue hair and a purple shirt with glasses', defaultAvatar);
@@ -52,4 +53,23 @@ it('lets a child preview a prompt immediately, reports unsupported requests, and
   fireEvent.click(toggle);
   expect(toggle).toHaveAttribute('aria-expanded', 'false');
   expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+});
+
+it('provides direct controls without requiring an identity prompt or a guessed keyword', () => {
+  const change = vi.fn();
+  function Preview() {
+    const [value, setValue] = useState(defaultAvatar);
+    return <AvatarCustomizer value={value} onChange={next => { setValue(next); change(next); }} language="en" />;
+  }
+  render(<Preview />);
+  fireEvent.click(screen.getByRole('button', { name: 'Design your learning companion' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Skin tone: Shade 5' }));
+  fireEvent.change(screen.getByLabelText('Hairstyle'), { target: { value: 'curly' } });
+  fireEvent.change(screen.getByLabelText('Eye colour'), { target: { value: 'green' } });
+  fireEvent.change(screen.getByLabelText('Face shape'), { target: { value: 'round' } });
+  fireEvent.click(screen.getByLabelText('Glasses'));
+  expect(change).toHaveBeenLastCalledWith({
+    ...defaultAvatar, skin: 'deep', hairLength: 'curly', eyes: 'green', face: 'round', glasses: true,
+  });
+  expect(screen.getByRole('button', { name: 'Skin tone: Shade 5' })).toHaveAttribute('aria-pressed', 'true');
 });
