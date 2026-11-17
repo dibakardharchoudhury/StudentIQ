@@ -14,7 +14,7 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock('microsoft-cognitiveservices-speech-sdk', () => ({
   SpeechConfig: { fromAuthorizationToken: state.configure },
-  PropertyId: { Speech_SegmentationSilenceTimeoutMs: 1 },
+  PropertyId: { Speech_SegmentationSilenceTimeoutMs: 1, SpeechServiceConnection_InitialSilenceTimeoutMs: 2 },
   Recognizer: { enableTelemetry: vi.fn() },
   SpeechSynthesisOutputFormat: { Audio24Khz48KBitRateMonoMp3: 1 },
   AudioConfig: {
@@ -50,23 +50,92 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('push-to-talk microphone lifecycle', () => {
-  it('shows interim words and automatically finishes a hands-free turn after a recognized phrase', async () => {
-    const stop = vi.fn();
-    Object.defineProperty(navigator, 'mediaDevices', {
-      value: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop }] }) }, configurable: true,
-    });
-    const transcript = vi.fn(), partial = vi.fn(), ready = vi.fn();
-    const speech = new Speech(async () => ({ token: 'test-token', region: 'norwayeast' }), vi.fn());
-    await speech.listen('en', transcript, vi.fn(), { partial, ready });
-    expect(ready).toHaveBeenCalledOnce();
-    state.recognizers[0].recognizing?.(null, { result: { text: 'I would like' } });
-    expect(partial).toHaveBeenCalledWith('I would like');
-    expect(transcript).not.toHaveBeenCalled();
-    state.recognizers[0].recognized?.(null, { result: { reason: 3, text: 'I would like a hint.' } });
-    expect(transcript).toHaveBeenCalledExactlyOnceWith('I would like a hint.');
-    expect(stop).toHaveBeenCalledOnce();
-    state.recognizers[0].recognizing?.(null, { result: { text: 'late words' } });
-    expect(partial).toHaveBeenCalledOnce();
+  it('collects multiple phrases across brief pauses and shows the complete turn before submitting once', async () => {
+    vi.useFakeTimers();
+    try {
+      const stop = vi.fn();
+      Object.defineProperty(navigator, 'mediaDevices', {
+        value: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop }] }) }, configurable: true,
+      });
+      const transcript = vi.fn(), partial = vi.fn(), ready = vi.fn();
+      const speech = new Speech(async () => ({ token: 'test-token', region: 'norwayeast' }), vi.fn());
+      await speech.listen('en', transcript, vi.fn(), { partial, ready });
+      expect(ready).toHaveBeenCalledOnce();
+      state.recognizers[0].recognizing?.(null, { result: { text: 'I would like' } });
+      expect(partial).toHaveBeenCalledWith('I would like');
+      expect(transcript).not.toHaveBeenCalled();
+      state.recognizers[0].recognized?.(null, { result: { reason: 3, text: 'I would like a hint.' } });
+      expect(transcript).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(800);
+      state.recognizers[0].recognizing?.(null, { result: { text: 'Can you explain' } });
+      expect(partial).toHaveBeenLastCalledWith('I would like a hint. Can you explain');
+      vi.advanceTimersByTime(1200);
+      expect(stop).not.toHaveBeenCalled();
+      state.recognizers[0].recognized?.(null, { result: { reason: 3, text: 'Can you explain melting?' } });
+      vi.advanceTimersByTime(1000);
+      expect(transcript).toHaveBeenCalledExactlyOnceWith('I would like a hint. Can you explain melting?');
+      expect(stop).toHaveBeenCalledOnce();
+      const partialCalls = partial.mock.calls.length;
+      state.recognizers[0].recognizing?.(null, { result: { text: 'late words' } });
+      expect(partial).toHaveBeenCalledTimes(partialCalls);
+    } finally { vi.useRealTimers(); }
+  });
+  it('cancels a pending turn boundary without sending its partial transcript', async () => {
+    vi.useFakeTimers();
+    try {
+      const stop = vi.fn();
+      Object.defineProperty(navigator, 'mediaDevices', {
+        value: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop }] }) }, configurable: true,
+      });
+      const transcript = vi.fn();
+      const speech = new Speech(async () => ({ token: 'test-token', region: 'norwayeast' }), vi.fn());
+      await speech.listen('en', transcript, vi.fn(), { partial: vi.fn(), ready: vi.fn() });
+      state.recognizers[0].recognized?.(null, { result: { reason: 3, text: 'An unfinished thought.' } });
+      speech.cancel();
+      vi.advanceTimersByTime(120_000);
+      expect(transcript).not.toHaveBeenCalled();
+      expect(stop).toHaveBeenCalledOnce();
+    } finally { vi.useRealTimers(); }
+  });
+  it('allows a guided answer longer than 30 seconds but still bounds continuous capture to two minutes', async () => {
+    vi.useFakeTimers();
+    try {
+      const stop = vi.fn();
+      Object.defineProperty(navigator, 'mediaDevices', {
+        value: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop }] }) }, configurable: true,
+      });
+      const transcript = vi.fn();
+      const speech = new Speech(async () => ({ token: 'test-token', region: 'norwayeast' }), vi.fn());
+      await speech.listen('en', transcript, vi.fn(), { partial: vi.fn(), ready: vi.fn() });
+      for (let elapsed = 25_000; elapsed <= 100_000; elapsed += 25_000) {
+        vi.advanceTimersByTime(25_000);
+        state.recognizers[0].recognizing?.(null, { result: { text: 'Still explaining my answer' } });
+        expect(speech.active).toBe(true);
+      }
+      vi.advanceTimersByTime(19_999);
+      expect(stop).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(stop).toHaveBeenCalledOnce();
+      expect(transcript).toHaveBeenCalledOnce();
+      expect(speech.active).toBe(false);
+    } finally { vi.useRealTimers(); }
+  });
+  it('gives a guided learner a full minute to begin before pausing an empty turn', async () => {
+    vi.useFakeTimers();
+    try {
+      const stop = vi.fn();
+      Object.defineProperty(navigator, 'mediaDevices', {
+        value: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop }] }) }, configurable: true,
+      });
+      const transcript = vi.fn();
+      const speech = new Speech(async () => ({ token: 'test-token', region: 'norwayeast' }), vi.fn());
+      await speech.listen('en', transcript, vi.fn(), { partial: vi.fn(), ready: vi.fn() });
+      vi.advanceTimersByTime(59_999);
+      expect(stop).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(stop).toHaveBeenCalledOnce();
+      expect(transcript).toHaveBeenCalledExactlyOnceWith('');
+    } finally { vi.useRealTimers(); }
   });
   it('requests audio only on listen and immediately stops tracks on release, then emits the transcript', async () => {
     const stop = vi.fn();

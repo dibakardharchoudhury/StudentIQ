@@ -30,6 +30,8 @@ export class Speech {
   private audioUrl?: string;
   private settle?: () => void;
   private timer?: ReturnType<typeof setTimeout>;
+  private turnTimer?: ReturnType<typeof setTimeout>;
+  private idleTimer?: ReturnType<typeof setTimeout>;
   private request?: AbortController;
   private stopped = true;
   private text = '';
@@ -63,20 +65,36 @@ export class Speech {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       if (generation !== this.generation) { stream.getTracks().forEach(track => track.stop()); return; }
       this.stream = stream;
-      this.timer = setTimeout(() => this.stopListening(), 30_000);
+      this.timer = setTimeout(() => this.stopListening(), turn ? 120_000 : 30_000);
       const config = sdk.SpeechConfig.fromAuthorizationToken(authorization.token, authorization.region);
       config.speechRecognitionLanguage = speechLocale(language);
-      if (turn) config.setProperty(sdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, '1200');
+      if (turn) {
+        config.setProperty(sdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, '1500');
+        config.setProperty(sdk.PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs, '60000');
+      }
       this.input = sdk.AudioConfig.fromStreamInput(stream);
       const recognizer = new sdk.SpeechRecognizer(config, this.input);
       this.recognizer = recognizer;
+      const waitForSpeech = () => {
+        clearTimeout(this.idleTimer);
+        this.idleTimer = setTimeout(() => this.stopListening(), 60_000);
+      };
       recognizer.recognizing = (_, event) => {
-        if (generation === this.generation && !this.stopped) turn?.partial(event.result.text);
+        if (generation !== this.generation || this.stopped || !turn || !event.result.text.trim()) return;
+        clearTimeout(this.turnTimer);
+        waitForSpeech();
+        turn.partial(`${this.text} ${event.result.text}`.trim());
       };
       recognizer.recognized = (_, event) => {
         if (generation === this.generation && event.result.reason === sdk.ResultReason.RecognizedSpeech) {
           this.text = `${this.text} ${event.result.text}`.trim();
-          if (turn && !this.stopped && this.text) this.stopListening();
+          if (turn && !this.stopped && this.text) {
+            turn.partial(this.text);
+            waitForSpeech();
+            clearTimeout(this.turnTimer);
+            // An SDK phrase boundary is not necessarily the end of the learner's turn.
+            this.turnTimer = setTimeout(() => this.stopListening(), 1000);
+          }
         }
       };
       recognizer.canceled = (_, event) => {
@@ -90,6 +108,7 @@ export class Speech {
       };
       await new Promise<void>((resolve, reject) => recognizer.startContinuousRecognitionAsync(resolve, reject));
       if (generation !== this.generation) return;
+      if (turn) waitForSpeech();
       turn?.ready();
     } catch (error) {
       if (generation !== this.generation) return;
@@ -102,6 +121,8 @@ export class Speech {
     if (this.stopped) return;
     this.stopped = true;
     clearTimeout(this.timer);
+    clearTimeout(this.turnTimer);
+    clearTimeout(this.idleTimer);
     // Stop physical capture immediately, not after an SDK/network callback.
     this.stream?.getTracks().forEach(track => track.stop());
     this.stream = undefined;
@@ -184,6 +205,8 @@ export class Speech {
     this.settle?.();
     this.settle = undefined;
     clearTimeout(this.timer);
+    clearTimeout(this.turnTimer);
+    clearTimeout(this.idleTimer);
     this.stream?.getTracks().forEach(track => track.stop());
     this.stream = undefined;
     this.recognizer?.close();

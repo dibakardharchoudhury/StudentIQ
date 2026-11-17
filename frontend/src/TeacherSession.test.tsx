@@ -85,12 +85,14 @@ describe('guided teacher session', () => {
     act(() => voice.finish?.('The answer is eight.'));
     await waitFor(() => expect(voice.say).toHaveBeenLastCalledWith(
       expect.stringContaining('Yes, that’s correct! Well done.'), 'en', 'default'));
+    expect(screen.getAllByText(/Yes, that’s correct! Well done/)).toHaveLength(1);
     expect(api.checkLessonAnswer).toHaveBeenCalledWith('maths', 'en', '2026-11-16', 'numbers', 0, expect.any(AbortSignal));
     expect(api.quiz).toHaveBeenCalledOnce();
     expect(api.chat).not.toHaveBeenCalled();
     await act(async () => finishPraise());
     await screen.findByRole('heading', { name: 'Question 1?' });
     expect(screen.getByText(/Yes, that’s correct! Well done/)).toBeInTheDocument();
+    expect(screen.getByText('Previous answer')).toBeInTheDocument();
   });
 
   it('politely rejects a wrong spoken answer and listens for another try without revealing or saving the answer', async () => {
@@ -104,6 +106,8 @@ describe('guided teacher session', () => {
     act(() => voice.finish?.('Option two.'));
     await waitFor(() => expect(voice.listen).toHaveBeenCalledTimes(2));
     expect(voice.say).toHaveBeenLastCalledWith(expect.stringContaining('No, that’s not correct yet.'), 'en', 'default');
+    expect(screen.getAllByText(/No, that’s not correct yet/)).toHaveLength(1);
+    expect(screen.queryByText('Previous answer')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Question 1?' })).toBeInTheDocument();
     expect(screen.getByText(/0 \/ 10 questions answered/)).toBeInTheDocument();
     expect(api.answerLesson).not.toHaveBeenCalled();
@@ -128,12 +132,47 @@ describe('guided teacher session', () => {
       'maths', 'en', '2026-11-16', 'decimal', 1, expect.any(AbortSignal)));
   });
 
+  it('distinguishes numeric answers from option numbers and puts choices before conversation controls', async () => {
+    const { api } = await setup();
+    api.quiz.mockResolvedValueOnce({ id: 'numeric-options', question: 'What is two plus two?',
+      options: ['3', '4', '5', '6'] });
+    fireEvent.click(screen.getByRole('button', { name: 'Start lesson (10 questions)' }));
+    await screen.findByRole('heading', { name: 'What is two plus two?' });
+    const choice = screen.getByRole('button', { name: 'Option 2: 4' });
+    expect(choice.compareDocumentPosition(screen.getByRole('button', { name: 'Turn on conversation' })) &
+      Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await waitFor(() => expect(choice).toBeEnabled());
+    fireEvent.click(choice);
+    await waitFor(() => expect(api.checkLessonAnswer).toHaveBeenCalledWith(
+      'maths', 'en', '2026-11-16', 'numeric-options', 1, expect.any(AbortSignal)));
+  });
+
+  it('restores an answered question as one feedback message without a stale greeting or answer choices', async () => {
+    const { api, props, unmount } = await setup('science');
+    unmount();
+    api.dailyLesson.mockResolvedValueOnce({
+      date: '2026-11-16', timeZone: 'UTC', subject: 'Science', language: 'en', completed: 2, target: 10,
+      current: { id: 'ice', question: 'What happens when ice warms up?',
+        options: ['Melting', 'Freezing', 'Boiling', 'Condensing'] },
+      answer: { correct: true, correctIndex: 0, answerIndex: 0, explanation: 'Ice turns into liquid water.' },
+    });
+    render(<TeacherSession {...props} />);
+    await screen.findByText(/2 \/ 10 questions answered/);
+    expect(screen.getAllByText(/Ice turns into liquid water/)).toHaveLength(1);
+    expect(screen.queryByText(/How has your day been/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Choose one answer' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next question' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Turn on conversation' }));
+    await waitFor(() => expect(voice.say).toHaveBeenCalledWith(
+      expect.stringContaining('Ice turns into liquid water.'), 'en', 'default'));
+  });
+
   it('restores durable counts and the exact current question after early ending and a full remount', async () => {
     const { api, props, unmount } = await setup();
     fireEvent.click(screen.getByRole('button', { name: 'Start lesson (10 questions)' }));
     await screen.findByRole('heading', { name: 'Question 1?' });
-    await waitFor(() => expect(screen.getByRole('button', { name: '1. First' })).toBeEnabled());
-    fireEvent.click(screen.getByRole('button', { name: '1. First' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Option 1: First' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Option 1: First' }));
     await screen.findByRole('heading', { name: 'Question 2?' });
     fireEvent.click(screen.getByRole('button', { name: 'End session' }));
     expect(screen.getByText(/Session ended/)).toBeInTheDocument();
@@ -180,8 +219,8 @@ describe('guided teacher session', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Start lesson (10 questions)' }));
     await screen.findByRole('heading', { name: 'Question 1?' });
-    await waitFor(() => expect(screen.getByRole('button', { name: '1. First' })).toBeEnabled());
-    fireEvent.click(screen.getByRole('button', { name: '1. First' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Option 1: First' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Option 1: First' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Response lost');
     expect(screen.getByText(/0 \/ 10 questions answered/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Check saved progress' }));
@@ -232,6 +271,88 @@ describe('guided teacher session', () => {
     expect(screen.getByRole('button', { name: 'Turn on conversation' })).toBeEnabled();
   });
 
+  it('resumes listening without replaying the previous reply and accepts a spoken pause without ending the lesson', async () => {
+    const { api } = await setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Turn on conversation' }));
+    await waitFor(() => expect(voice.listen).toHaveBeenCalledOnce());
+    act(() => voice.finish?.('pause conversation'));
+    expect(screen.getByRole('button', { name: 'Turn on conversation' })).toBeEnabled();
+    expect(screen.queryByText(/Session ended/)).not.toBeInTheDocument();
+    const spoken = voice.say.mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: 'Turn on conversation' }));
+    await waitFor(() => expect(voice.listen).toHaveBeenCalledTimes(2));
+    expect(voice.say).toHaveBeenCalledTimes(spoken);
+    expect(api.chat).not.toHaveBeenCalled();
+  });
+
+  it('does not cancel a pending exchange on incidental blur but still stops when the page is hidden', async () => {
+    const { api } = await setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Turn on conversation' }));
+    await waitFor(() => expect(voice.listen).toHaveBeenCalledOnce());
+    let finish!: (value: { sessionId: string; reply: string }) => void;
+    api.chat.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    act(() => voice.finish?.('Can we talk about space?'));
+    await waitFor(() => expect(api.chat).toHaveBeenCalledOnce());
+    const signal = api.chat.mock.calls[0][1] as AbortSignal;
+    act(() => window.dispatchEvent(new Event('blur')));
+    expect(signal.aborted).toBe(false);
+    await act(async () => { finish({ sessionId: 'session', reply: 'Of course. What interests you about space?' }); });
+    await waitFor(() => expect(voice.listen).toHaveBeenCalledTimes(2));
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+    try {
+      act(() => document.dispatchEvent(new Event('visibilitychange')));
+      expect(screen.getByRole('button', { name: 'Turn on conversation' })).toBeEnabled();
+      expect(screen.queryByRole('button', { name: 'Pause conversation' })).not.toBeInTheDocument();
+    } finally { hidden.mockRestore(); }
+  });
+
+  it('lets the learner take the floor during praise without forcing the next question, preserving follow-up context', async () => {
+    const { api } = await setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Start lesson (10 questions)' }));
+    await screen.findByRole('heading', { name: 'Question 1?' });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Turn on conversation' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Turn on conversation' }));
+    await waitFor(() => expect(voice.listen).toHaveBeenCalledOnce());
+    let finishPraise!: () => void;
+    voice.say.mockImplementationOnce(() => new Promise<void>(resolve => { finishPraise = resolve; }));
+    act(() => voice.finish?.('Option one'));
+    const handover = await screen.findByRole('button', { name: 'Let me speak' });
+    voice.cancel.mockImplementationOnce(() => finishPraise());
+    fireEvent.click(handover);
+    await waitFor(() => expect(voice.listen).toHaveBeenCalledTimes(2));
+    expect(api.quiz).toHaveBeenCalledOnce();
+    expect(screen.getByText(/1 \/ 10 questions answered/)).toBeInTheDocument();
+    act(() => voice.finish?.('Why is that the answer?'));
+    await waitFor(() => expect(api.chat).toHaveBeenCalledWith(expect.objectContaining({
+      message: expect.stringMatching(/most recently completed question[\s\S]*Why is that the answer[\s\S]*Question 1[\s\S]*A saved explanation/),
+    }), expect.any(AbortSignal)));
+    expect(api.answerLesson).toHaveBeenCalledOnce();
+  });
+
+  it('keeps conversation available after question ten and answers follow-ups in the completed lesson context', async () => {
+    const { api } = await setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Start lesson (10 questions)' }));
+    await screen.findByRole('heading', { name: 'Question 1?' });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Turn on conversation' })).toBeEnabled());
+    api.answerLesson.mockResolvedValueOnce({
+      result: { correct: true, correctIndex: 0, explanation: 'A final explanation.' },
+      lesson: { date: '2026-11-16', timeZone: 'UTC', subject: 'Maths', language: 'en', completed: 10, target: 10,
+        current: { id: 'question-1', question: 'Question 1?', options: ['First', 'Second', 'Third', 'Fourth'] },
+        answer: { correct: true, correctIndex: 0, answerIndex: 0, explanation: 'A final explanation.' } },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Turn on conversation' }));
+    await waitFor(() => expect(voice.listen).toHaveBeenCalledOnce());
+    act(() => voice.finish?.('Option one'));
+    await screen.findByText(/That's our ten questions/);
+    await waitFor(() => expect(voice.listen).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('button', { name: 'Pause conversation' })).toBeEnabled();
+    act(() => voice.finish?.('Could you explain that again?'));
+    await waitFor(() => expect(api.chat).toHaveBeenCalledWith(expect.objectContaining({
+      message: expect.stringContaining('A final explanation.'),
+    }), expect.any(AbortSignal)));
+    expect(api.quiz).toHaveBeenCalledOnce();
+  });
+
   it('lets the learner explicitly select a practice language before starting', async () => {
     const { props, api, rerender } = await setup();
     rerender(<TeacherSession {...props} subject="otherLanguages" />);
@@ -252,8 +373,8 @@ describe('guided teacher session', () => {
       .mockRejectedValueOnce(new Error('Question generator unavailable (503).'));
     fireEvent.click(screen.getByRole('button', { name: 'Start lesson (10 questions)' }));
     await screen.findByRole('heading', { name: 'A saved question?' });
-    await waitFor(() => expect(screen.getByRole('button', { name: '1. A' })).toBeEnabled());
-    fireEvent.click(screen.getByRole('button', { name: '1. A' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Option 1: A' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Option 1: A' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Question generator unavailable');
     expect(screen.getByRole('alert')).not.toHaveTextContent('may have been saved');
     expect(screen.getByText(/1 \/ 10 questions answered/)).toBeInTheDocument();
@@ -298,7 +419,7 @@ describe('guided teacher session', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start lesson (10 questions)' }));
     for (let index = 1; index <= 10; index++) {
       await screen.findByRole('heading', { name: `Question ${index}?` });
-      const option = screen.getByRole('button', { name: '1. First' });
+      const option = screen.getByRole('button', { name: 'Option 1: First' });
       await waitFor(() => expect(option).toBeEnabled());
       expect(screen.getByRole('button', { name: 'End session' })).toBeEnabled();
       fireEvent.click(option);

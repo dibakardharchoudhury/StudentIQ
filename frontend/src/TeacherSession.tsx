@@ -57,6 +57,8 @@ export default function TeacherSession({ api, subject, language, preferences, ac
   const pendingWrites = useRef(false);
   const mounted = useRef(false);
   const enabled = useRef(false);
+  const conversationStarted = useRef(false);
+  const speechInterrupted = useRef(false);
   const currentQuestion = useRef<QuizQuestion | null>(null);
   const count = useRef(0);
   const sessionId = useRef<string | undefined>(undefined);
@@ -78,7 +80,7 @@ export default function TeacherSession({ api, subject, language, preferences, ac
     setQuestion(current);
     if (current) {
       spokenReply.current = [`${c.teacherLesson} ${saved.completed + 1}.`, current.lesson, current.question,
-        ...current.options.map((option, index) => `${index + 1}: ${option}.`), c.teacherChoice].filter(Boolean).join(' ');
+        ...current.options.map((option, index) => `${c.teacherOption} ${index + 1}: ${option}.`), c.teacherChoice].filter(Boolean).join(' ');
       setReply(c.teacherQuestionIntro);
     } else if (!saved.answer) {
       spokenReply.current = welcome;
@@ -89,7 +91,12 @@ export default function TeacherSession({ api, subject, language, preferences, ac
     }
     setDone(saved.completed >= saved.target && !current);
     if (saved.answer && saved.current) {
-      setFeedback(`${saved.answer.correct ? c.teacherCorrect : c.quizTry} ${c.teacherAnswer}: ${saved.current.options[saved.answer.correctIndex]}. ${saved.answer.explanation}`);
+      const explanation = `${saved.answer.correct ? c.teacherCorrect : c.quizTry} ${c.teacherAnswer}: ${saved.current.options[saved.answer.correctIndex]}. ${saved.answer.explanation}`;
+      setFeedback(explanation);
+      if (saved.completed < saved.target) {
+        spokenReply.current = explanation;
+        setReply(explanation);
+      }
     } else if (!keepFeedback) setFeedback('');
   }
 
@@ -161,7 +168,6 @@ export default function TeacherSession({ api, subject, language, preferences, ac
     const leave = () => interrupt();
     const hidden = () => { if (document.hidden) leave(); };
     const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') leave(); };
-    window.addEventListener('blur', leave);
     window.addEventListener('pagehide', leave);
     window.addEventListener('offline', leave);
     window.addEventListener('keydown', escape);
@@ -172,7 +178,6 @@ export default function TeacherSession({ api, subject, language, preferences, ac
       speech.current?.cancel();
       request.current?.abort();
       request.current = null;
-      window.removeEventListener('blur', leave);
       window.removeEventListener('pagehide', leave);
       window.removeEventListener('offline', leave);
       window.removeEventListener('keydown', escape);
@@ -228,6 +233,7 @@ export default function TeacherSession({ api, subject, language, preferences, ac
     setHeard('');
     const controller = new AbortController();
     request.current = controller;
+    speechInterrupted.current = false;
     pendingWrites.current = writes;
     setMode('thinking');
     setError('');
@@ -261,7 +267,7 @@ export default function TeacherSession({ api, subject, language, preferences, ac
     await deliver([
       `${c.teacherLesson} ${count.current + 1}.`,
       fresh.lesson, fresh.question,
-      ...fresh.options.map((option, index) => `${index + 1}: ${option}.`),
+      ...fresh.options.map((option, index) => `${c.teacherOption} ${index + 1}: ${option}.`),
       c.teacherChoice,
     ].filter(Boolean).join(' '), signal, c.teacherQuestionIntro);
   }
@@ -290,11 +296,10 @@ export default function TeacherSession({ api, subject, language, preferences, ac
       const explanation = `${result.correct ? c.teacherCorrect : c.quizTry} ${c.teacherAnswer}: ${current.options[result.correctIndex]}. ${result.explanation}`;
       setFeedback(explanation);
       await deliver(explanation, signal);
-      if (signal.aborted) return;
+      if (signal.aborted || speechInterrupted.current) return;
       if (saved.lesson.completed >= 10) {
         setDone(true);
         await deliver(c.teacherDone, signal);
-        pauseVoice();
       } else {
         await loadQuestion(signal);
       }
@@ -303,11 +308,15 @@ export default function TeacherSession({ api, subject, language, preferences, ac
 
   function receive(text: string) {
     const clean = normalize(text);
-    if (['end lesson', 'end session', 'stop listening', 'stop conversation', 'avslutt timen', 'avslutt økten', 'stopp samtalen'].includes(clean)) {
-      interrupt(); setEnded(true); return;
+    if (['end lesson', 'end session', 'avslutt timen', 'avslutt økten'].includes(clean)) {
+      interrupt(); setDraft(''); setEnded(true); return;
+    }
+    if (['pause conversation', 'pause', 'take a break', 'stop listening', 'stop conversation', 'ta en pause', 'pause samtalen', 'stopp samtalen'].includes(clean)) {
+      pauseVoice(); setDraft(''); return;
     }
     if (!currentQuestion.current && subject !== 'piano' &&
       ['start lesson', 'start the lesson', 'ready', "i'm ready", 'next question', 'start timen', 'jeg er klar', 'neste spørsmål'].includes(clean)) {
+      setDraft('');
       void run(loadQuestion, false);
       return;
     }
@@ -322,11 +331,16 @@ export default function TeacherSession({ api, subject, language, preferences, ac
     if (text.length > 700) { pauseVoice(); setDraft(text); setError(c.messageTooLong); return; }
     setDraft(text);
     void run(async signal => {
-      const guidance = current || subject === 'piano' ? c.teacherHelpPrompt : c.teacherReadyPrompt;
+      const previous = !current && lesson.current?.answer ? lesson.current : null;
+      const guidance = current || subject === 'piano' ? c.teacherHelpPrompt
+        : previous ? c.teacherReviewPrompt : c.teacherReadyPrompt;
       const context = [
         subject === 'otherLanguages' ? practiceLanguage : '',
         subject === 'piano' ? pianoContext.current
-          : current ? `${current.question} ${JSON.stringify(current.options)}` : '',
+          : current ? `${current.question} ${JSON.stringify(current.options)}`
+            : previous?.current && previous.answer
+              ? `${previous.current.question}\n${previous.current.options[previous.answer.correctIndex]}\n${previous.answer.explanation}`
+              : '',
       ].filter(Boolean).join('\n');
       const message = `${guidance}${text}${context ? `\n${context.slice(0, Math.max(0, 1199 - guidance.length - text.length))}` : ''}`;
       const response = await api.chat({
@@ -347,7 +361,12 @@ export default function TeacherSession({ api, subject, language, preferences, ac
     if (request.current || blocked || !online || !active || ended) return;
     enabled.current = true;
     setHandsFree(true);
-    void run(async signal => { await deliver(spokenReply.current, signal, reply); }, false);
+    setError('');
+    if (conversationStarted.current) listenNext();
+    else {
+      conversationStarted.current = true;
+      void run(async signal => { await deliver(spokenReply.current, signal, reply); }, false);
+    }
   }
 
   const unavailable = busy || blocked || !online || ended || (subject !== 'piano' && !lessonReady);
@@ -366,17 +385,39 @@ export default function TeacherSession({ api, subject, language, preferences, ac
         <option value="German">{c.missionGerman}</option>
       </select>
     </label>}
-    <div className="teacher-bubble" aria-live="polite">{ended ? c.teacherEnded : reply}</div>
-    {feedback && <p className="notice">{feedback}</p>}
+    {(ended || (reply !== feedback && (!question || reply !== c.teacherQuestionIntro))) &&
+      <div className="teacher-bubble" aria-live="polite">{ended ? c.teacherEnded : reply}</div>}
+    {feedback && <div className="guided-feedback" role="status">
+      {question && feedback !== c.teacherIncorrect && <p className="guided-feedback-label">{c.teacherPreviousAnswer}</p>}
+      <p>{feedback}</p>
+    </div>}
+    {question && <div className="guided-question">
+      <p>{c.teacherLesson} {completed + 1} / {Math.max(10, completed + 1)}</p>
+      {question.lesson && <p>{question.lesson}</p>}
+      <h3>{question.question}</h3>
+      {question.visual && <MissionVisual visual={question.visual} label={c.missionVisual}
+        filledLabel={c.missionFilled} partsLabel={c.missionParts} lineLabel={c.missionLine}
+        fromLabel={c.missionFrom} toLabel={c.missionTo} />}
+      <p className="guided-choice-hint">{c.teacherChooseAnswer}</p>
+      <div className="guided-choices" role="group" aria-label={c.quizChoices}>
+        {question.options.map((option, index) => <button type="button" key={index} disabled={unavailable}
+          onClick={() => answer(index)}><span className="guided-option-label">{c.teacherOption} {index + 1}:</span>{' '}
+          <span className="guided-option-text">{option}</span></button>)}
+      </div>
+    </div>}
     <div className="teacher-session-actions">
       {!ended && !question && !done && subject !== 'piano' && <button type="button" className="primary" disabled={unavailable}
         onClick={() => void run(loadQuestion, false)}>{completed ? c.teacherNext : c.teacherStartLesson}</button>}
-      {!ended && !handsFree && <button type="button" className={question || subject === 'piano' ? 'primary' : undefined} disabled={unavailable}
+      {!ended && !handsFree && <button type="button" disabled={unavailable}
         onClick={enableConversation}>{c.teacherHandsFree}</button>}
       {!ended && handsFree && <button type="button" onClick={() => {
         pauseVoice();
         if (request.current) setMode('thinking');
       }}>{c.teacherPauseVoice}</button>}
+      {!ended && handsFree && mode === 'speaking' && <button type="button" onClick={() => {
+        speechInterrupted.current = true;
+        speech.current?.cancel();
+      }}>{c.teacherSpeakNow}</button>}
       {!ended && <button type="button" onClick={() => { interrupt(); setEnded(true); }}>{c.teacherEnd}</button>}
       {ended && !blocked && <button type="button" onClick={() => { setEnded(false); setError(''); }}>{c.teacherResume}</button>}
       {done && !ended && <button type="button" disabled={unavailable}
@@ -389,18 +430,6 @@ export default function TeacherSession({ api, subject, language, preferences, ac
     </>}
       {subject === 'piano' && <PianoLesson language={language} active={active && online && !busy && !ended} soundAllowed={!handsFree}
         onContext={updatePianoContext} />}
-      {question && <div className="guided-question">
-        <p>{c.teacherLesson} {completed + 1} / {Math.max(10, completed + 1)}</p>
-        {question.lesson && <p>{question.lesson}</p>}
-        <h3>{question.question}</h3>
-        {question.visual && <MissionVisual visual={question.visual} label={c.missionVisual}
-          filledLabel={c.missionFilled} partsLabel={c.missionParts} lineLabel={c.missionLine}
-          fromLabel={c.missionFrom} toLabel={c.missionTo} />}
-        <div className="guided-choices" role="group" aria-label={c.quizChoices}>
-          {question.options.map((option, index) => <button type="button" key={index} disabled={unavailable}
-            onClick={() => answer(index)}>{index + 1}. {option}</button>)}
-        </div>
-      </div>}
       {!ended && <form className="teacher-composer" onSubmit={event => { event.preventDefault(); if (draft.trim() && !unavailable) receive(draft.trim()); }}>
         <label htmlFor="teacher-reply">{c.teacherType}</label>
         <textarea id="teacher-reply" rows={2} maxLength={700} value={draft} disabled={unavailable}
